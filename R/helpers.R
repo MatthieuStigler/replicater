@@ -1,6 +1,7 @@
 #' Check dependencies in package
 #'
 #' @param path_scripts path where the scripts are located
+#' @export
 rpl_check_deps <- function(path_scripts="."){
   ## check packages
   rnv_scripts <- renv::dependencies(path_scripts)
