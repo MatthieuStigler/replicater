@@ -4,12 +4,12 @@
 \name{replicater-package}
 \alias{replicater}
 \alias{replicater-package}
-\title{replicater: Replicate multiple scripts and issue a report}
+\title{Some description}
 \description{
-Thids package intends to replicate multiple scripts contained, and issue a tabular odcument reporting the errors encountered.
+This package provides tools for replicating R scripts. It is stored in: https://github.com/MatthieuStigler/replicater.
 }
 \author{
-\strong{Maintainer}: First Last \email{Matthieu.Stigler@example.com}
+\strong{Maintainer}: Matthieu Stigler \email{Matthieu.Stigler@example.com}
 
 }
 \keyword{internal}

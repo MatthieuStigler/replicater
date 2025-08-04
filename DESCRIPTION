@@ -2,8 +2,8 @@ Package: replicater
 Title: Replicate multiple scripts and issue a report
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "Matthieu.Stigler@example.com", role = c("aut", "cre"))
-Description: Thids package intends to replicate multiple scripts contained, and issue a tabular odcument reporting the errors encountered.
+    person("Matthieu", "Stigler", , "Matthieu.Stigler@example.com", role = c("aut", "cre"))
+Description: Thids package intends to replicate multiple scripts contained, and issue a tabular document reporting the errors encountered.
 License: MIT + file LICENSE
 Suggests: 
     testthat (>= 3.0.0)
