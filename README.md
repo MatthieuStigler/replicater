@@ -1,0 +1,32 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+# replicater
+
+<!-- badges: start -->
+
+[![Lifecycle:
+experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![CRAN
+status](https://www.r-pkg.org/badges/version/replicater)](https://CRAN.R-project.org/package=replicater)
+<!-- badges: end -->
+
+The goal of replicater is to allow to replicate an R project, and obtain
+a document listing all errors encountered while re-runing each file.
+
+## Installation
+
+You can install the development version of replicater like so:
+
+``` r
+remotes::install_github("MatthieuStigler/replicater", upgrade = "never")
+```
+
+## Example
+
+This is a basic example which shows you how to solve a common problem:
+
+``` r
+library(replicater)
+## basic example code
+```
