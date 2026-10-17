@@ -1,0 +1,343 @@
+## Copied from matPkg (R/99_run_check.R), with mat_ renamed into rpl_
+
+################################
+### Internal utilities
+################################
+
+intrnl_dir_to_file <- function(dir) paste(dir, "999_CHECK_RUN_report.csv", sep = "/") %>%
+  str_replace("//", "/")
+
+intrnl_cols_need <- c("session", "session_time",
+                     "user_node",
+                     "filename", "folder", "subfolder",
+                     "error", "has_error",
+                     "elapsed", "memory_used_mb",
+                     "user.self", "sys.self", "user.child",
+                     "sys.child", "ext", "number_char", "number", "error_parse",
+                     "has_error_parse", "has_yaml", "has_runMat", "runMat_val",
+                     "date", "time")
+
+
+intrnl_time_format <- function(x) {
+  if(is.na(x)) return(NA_character_)
+
+  # Convert difftime safely to seconds
+  if (inherits(x, "difftime")) {
+    x <- as.numeric(x, units = "secs")
+  }
+  if(x<1) return("<1 Sec")
+
+  mins <-  x/60
+  if(mins<1) return("<1 Min")
+
+  if(mins >60) {
+    H <- mins %/% 60
+    Min <- mins %% 60
+    H_Min <- paste0(H, ":", stringr::str_pad(round(Min),width = 2, pad = "0"))
+    return(paste0(H_Min, " Hour"))
+  }
+  dig <- ifelse(mins<5, 1,0)
+  return(paste(round(mins, dig), "Min"))
+}
+
+intrnl_time_format_vec <- function(x) sapply(x, intrnl_time_format)
+intrnl_err_to_chr <- function(x){
+  if(inherits(x, "condition")){
+    res <- rlang::with_options(crayon.enabled = FALSE,
+                               rlang::cnd_message(x, prefix = TRUE))
+  } else {
+    backtrace_line <- grepl("Backtrace", x)
+    end <- if(any(backtrace_line)) which(backtrace_line)-1 else length(x)
+    res <- paste(x[1:end], collapse = " ")
+  }
+  res
+}
+
+#' Read YAML header to list
+#' @param file_path The file path
+#' @noRd
+rpl_parse_yaml <- function(file_path){
+  ## remove #' to have standard YAMl header
+  input_lines <- readLines(file_path, warn=FALSE)
+  input_lines <- knitr::spin(text = input_lines, knit = FALSE)
+  tmp <- tempfile()
+  writeLines(input_lines, tmp)
+
+  ## now use rmarkdown::yaml_front_matter
+  rmarkdown::yaml_front_matter(tmp)
+}
+
+
+################################
+### Step 1: list R scripts
+################################
+
+
+#' @param dir_path directory of files
+#' @param no_old Avoid scripts in directory old?
+#' @param recursive Look into recursive folders?
+#' @param keep_field Additional YAML fields to keep
+#' @param check_numbers Whether to check if numbers are ambiguous?
+#' @export
+#' @rdname rpl_run_Rfiles
+rpl_list_Rfiles <- function(dir_path="code_setup", no_old = TRUE, recursive=FALSE,
+                            keep_field=NULL,
+                            check_numbers= TRUE) {
+
+  dir_df <- rpl_list_dir(dir_path, pattern="\\.R$", add_ext = TRUE, recursive = recursive) %>%
+    mutate(full_path = str_replace_all(.data$full_path, "//", "/"),
+           folder = dirname(.data$full_path),
+           subfolder = basename(dirname(.data$full_path)))
+
+  ## get yaml
+  res <- dir_df %>%
+    mutate(number_char = str_extract(.data$filename, "([0-9]+_)+") %>%
+             str_replace("_$", ""),
+           number = .data$number_char %>%
+             str_replace("_", "\\.") %>%
+             str_replace_all("_", "") %>%
+             as.numeric(),
+           yaml = map(.data$full_path, ~purrr::safely(rpl_parse_yaml)(.)))
+
+  ## check numbers
+  if(check_numbers && anyDuplicated(res$number) & !all(is.na(res$number))){
+    warning("Ambiguous numbers! Check with:\n
+        add_count(number, subfolder, name = 'n_num') %>%
+        filter(n_num>1) %>%
+        arrange(subfolder, number) %>%
+        select(filename, folder, subfolder, number_char, number)")
+  }
+
+  ## process yaml
+  safely_clean <- function(x) {
+    if(!is.null(x$error)){
+      x$error <- intrnl_err_to_chr(x$error)
+    }
+    x
+  }
+  ## unnest
+  res_yaml_df <- res %>%
+    dplyr::mutate(yaml = purrr::map(.data$yaml, safely_clean)) %>%
+    tidyr::unnest_wider("yaml")
+
+  ## check if any yaml header
+  if(!all(is.na(res_yaml_df$result))) {
+    res_yaml_df <- res_yaml_df%>%
+      tidyr::unnest_wider("result")
+  }
+  res_yaml_df <- res_yaml_df %>%
+    tibble::add_column(!!!c(runMat=NA)[setdiff("runMat", colnames(.))]) %>% ## add if miss
+    mutate(has_runMat = !is.na(.data$runMat),
+           runMat_val = .data$runMat & !is.na(.data$runMat),
+           yaml=  purrr::transpose(res$yaml) %>% purrr::pluck("result"),
+           has_yaml=map_lgl(.data$yaml, ~ !rlang::is_empty(.)))
+
+  if(!"error" %in% colnames(res_yaml_df)){
+    res_yaml_df <- res_yaml_df %>%
+      mutate(has_error_parse=FALSE,
+             error_parse=NA_character_)
+  } else {
+    res_yaml_df <- res_yaml_df %>%
+      mutate(has_error_parse=map_lgl(.data$error, ~!is.null(.) &!is.na(.)),
+             error_parse=map2_chr(.data$error, .data$has_error_parse,
+                                  ~dplyr::if_else(.y,
+                                                 as.character(.x),
+                                                 NA_character_)))
+  }
+
+  vars <- c("filename", "ext", "folder", "subfolder", "number_char", "number",
+            "yaml", "error_parse", "has_error_parse", "has_yaml", "has_runMat",
+            "runMat_val", "full_path", keep_field)
+  res_yaml_df <- res_yaml_df %>%
+    select(tidyselect::all_of(vars)) %>%
+    dplyr::relocate("full_path", .after = tidyselect::everything())
+
+  if(no_old) res_yaml_df <-  res_yaml_df %>%
+    filter(!stringr::str_detect(.data$full_path,
+                                stringr::regex("old.*/", ignore_case = TRUE)))
+  res_yaml_df
+}
+
+
+#' Run-check files 999 machinery
+#'
+#' List R scripts with their YAML header (`rpl_list_Rfiles()`), run them
+#' (`rpl_run_Rfiles()`), show errors (`rpl_showErr()`) and write a report
+#' `999_CHECK_RUN_report.csv` (`rpl_write()`).
+#'
+#' These functions were copied from the `mat_99_*` functions of the package matPkg.
+#' @param echo print which file done, and gc?
+#' @param runMat_true_only run only the ones with runMat: TRUE
+#' @param run_function use either source (internal) or R CMD BATCH (external)
+#' @param tmp_dir temporary dir to hold file when using `run_function="external"`
+#' @param run_cmd_vanilla when `run_function="external"`, should `--vanilla` be added?
+#' @examples
+#' library(replicater)
+#' library(readr)
+#'
+#' ## read
+#' path_rscripts <- system.file("r_scripts_fake", package = "replicater")
+#' path_temp <- tempdir()
+#' dir_dat <- rpl_list_Rfiles(path_rscripts)
+#' dir_dat
+#'
+#' ## run
+#' out <- rpl_run_Rfiles(dir_dat)
+#' out
+#' rpl_showErr(out)
+#'
+#' ## save
+#' rpl_write(out, dir = path_temp)
+#'
+#' ## check output
+#' read_csv(paste(path_temp, "999_CHECK_RUN_report.csv", sep="/"), col_types = cols())
+#'
+#' ## re-write
+#' rpl_write(out, dir = path_temp)
+#' read_csv(paste(path_temp, "999_CHECK_RUN_report.csv", sep="/"), col_types = cols())
+#' @export
+rpl_run_Rfiles <- function(scripts_file, echo=FALSE, runMat_true_only=TRUE,
+                           run_function=c("internal", "external"), tmp_dir=NULL, run_cmd_vanilla = FALSE) {
+
+  run_function <- match.arg(run_function)
+  if(!is.null(tmp_dir)) {
+    tmp_dir <- normalizePath(tmp_dir, mustWork = FALSE)
+    if(run_function=="internal") warning("Argument 'tmp_dir' not relevant when run_function=='internal'")
+  }
+  run_function <- switch(run_function,
+                         "internal"= function(x) source_throw(x, echo =echo),
+                         "external"= function(x) source_rcmd_batch(x, tmp_dir=tmp_dir, cmd_vanilla=run_cmd_vanilla))
+
+  if(runMat_true_only) {
+    scripts_file <- scripts_file %>%
+      filter(.data$runMat_val)
+    if(nrow(scripts_file)==0) stop("No R scripts with field 'runMat_val=TRUE', set argument 'runMat_true_only=FALSE' ?")
+  }
+
+  ## prep out data
+  vars_out <- c("filename", "has_error", "error",
+                "elapsed", "memory_used_mb",
+                "user.self", "sys.self", "user.child", "sys.child")
+
+  ## now RUN
+  out <- scripts_file %>%
+    mutate(try = map(.data$full_path, ~run_function(.))) %>%
+    mutate(error=map(.data$try, ~.[["error"]]),
+           has_error= map_lgl(.data$error, ~!is.null(.)),
+           error=map_chr(.data$error, ~ifelse(is.null(.), NA, intrnl_err_to_chr(.))),
+           timing = map2(.data$try, .data$has_error, ~if(.y) df_null else .x$result)) %>%
+    unnest("timing") %>%
+    dplyr::relocate(tidyselect::any_of(vars_out))
+
+  ## small check
+  if(!"memory_used_mb" %in% colnames(out)) {
+    out <- mutate(out, memory_used_mb=NA) %>%
+      dplyr::relocate(tidyselect::all_of(vars_out))
+  }
+  out
+}
+
+## utilities
+df_null <-  data.frame("user.self" = NA, "sys.self" = NA, "elapsed" = NA, "user.child" = NA, "sys.child" = NA)
+
+
+#' As character for bytes
+#'
+#' Simply copied from pryr:::print.bytes
+#' @noRd
+intrnl_bytes_to_chr <- function(x, digits = 1, unit=NULL) {
+
+  if(is.null(unit)) {
+    power <- min(floor(log(abs(x), 1000)), 4)
+    unit <- c("B", "kB", "MB", "GB", "TB")[power+1]
+  } else {
+    unit <- match.arg(unit, choices=c("B", "kB", "MB", "GB", "TB"))
+  }
+  x <-  intrnl_bytes_to_num(x, unit=unit)
+  formatted <- map_chr(x, ~format(signif(., digits = digits), big.mark = ",",
+                     scientific = FALSE))
+  paste(formatted,  unit)
+}
+
+#' As numeric for bytes, add argument unit
+#'
+#' @noRd
+intrnl_bytes_to_num <- function(x, unit = c("B", "kB", "MB", "GB", "TB")) {
+  unit <-  match.arg(unit)
+  power <-  match(unit, c("B", "kB", "MB", "GB", "TB")) -1
+  as.numeric(x/(1000^power))
+}
+
+
+#' @export
+#' @rdname rpl_run_Rfiles
+rpl_showErr <- function(scripts_file_runned) {
+  df_probs <- scripts_file_runned %>%
+    dplyr::filter(.data$has_error)
+
+  print(df_probs %>%
+    dplyr::select("filename", "error") )
+
+  print(df_probs %>%
+          dplyr::pull(.data$error))
+}
+
+#' @param scripts_file file of R scripts with path to run, from `rpl_list_Rfiles()`
+#' @param scripts_file_runned data from `rpl_run_Rfiles()`
+#' @param append Overwrite existing or append?
+#' @param cols_extra Extra columns to keep
+#' @export
+#' @rdname rpl_run_Rfiles
+rpl_write <- function(scripts_file_runned, dir_path="code_setup",
+                      append=NULL, cols_extra = NULL) {
+  file_out <- intrnl_dir_to_file(dir_path)
+  if(is.null(append)) append <- file.exists(file_out)
+  today <- Sys.Date() %>% as.character()
+  user <- paste(Sys.info()[c("user", "nodename")], collapse = "@")
+
+  ## add session info, etc
+  df_new <- scripts_file_runned %>%
+    dplyr::select_if(~!is.list(.)) %>%
+    mutate(session = today,
+           session = dplyr::if_else(duplicated(.data$session), "", .data$session),
+           session_time = sum(.data$elapsed, na.rm=TRUE) %>%
+             intrnl_time_format_vec(),
+           date = today,
+           time = Sys.time() %>% as.character(),
+           folder = dirname(.data$full_path),
+           subfolder = basename(dirname(.data$full_path)),
+           user_node =user) %>%
+    select(tidyselect::all_of(c(intrnl_cols_need, cols_extra)))
+
+  readr::write_csv(df_new, file_out, append=append)
+
+}
+
+#' @param warn Should it warn if file is actually missing?
+#' @details `rpl_add_info_last()` matches scripts on `filename` and `folder`,
+#' so use the same `dir_path` in `rpl_list_Rfiles()` across runs.
+#' @export
+#' @rdname rpl_run_Rfiles
+rpl_add_info_last <- function(scripts_file_runned, dir_path="code_setup", warn=TRUE) {
+  file_out <- intrnl_dir_to_file(dir_path)
+
+  if(file.exists(file_out)) {
+    df_out <- readr::read_csv(file_out, col_types = readr::cols()) %>%
+      filter(.data$time==max(.data$time)) %>%
+      select("filename", "folder",
+             elapsed_last = "elapsed",
+             has_error_last = "has_error")
+
+    ## keep folder as factor if it is one (a join with character would turn it into character)
+    if(is.factor(scripts_file_runned$folder)) {
+      df_out <- df_out %>%
+        mutate(folder = factor(.data$folder, levels = levels(scripts_file_runned$folder)))
+    }
+
+    scripts_file_runned <- scripts_file_runned %>%
+      left_join(df_out, by = c("filename", "folder"))
+  } else {
+    if(warn) warning("File not already there!")
+  }
+  scripts_file_runned
+}

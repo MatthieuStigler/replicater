@@ -11,5 +11,10 @@ This package provides tools for replicating R scripts. It is stored in: https://
 \author{
 \strong{Maintainer}: Matthieu Stigler \email{Matthieu.Stigler@example.com}
 
+Authors:
+\itemize{
+  \item Matthieu Stigler \email{Matthieu.Stigler@example.com}
+}
+
 }
 \keyword{internal}

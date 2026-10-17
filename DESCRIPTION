@@ -6,11 +6,26 @@ Authors@R:
 Description: Thids package intends to replicate multiple scripts contained, and issue a tabular document reporting the errors encountered.
 License: MIT + file LICENSE
 Suggests: 
+    ggplot2,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 Imports: 
+    callr,
+    dplyr,
+    knitr,
+    lobstr,
+    magrittr,
+    purrr,
+    readr,
     renv,
+    rlang,
+    rmarkdown,
+    stringr,
+    tibble,
+    tidyr,
+    tidyselect,
+    tools,
     utils
+Config/roxygen2/version: 8.1.1
