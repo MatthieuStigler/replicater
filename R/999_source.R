@@ -79,7 +79,7 @@ source_rcmd_batch <- function(path, echo=TRUE, tmp_dir=NULL, cmd_vanilla = FALSE
   ## read
   out_file <- readLines(tmp_file)
   proc_line <- grepl("proc.time\\(\\)$", out_file)
-  has_normal_end <- any(proc_line)
+  has_normal_end <- any(proc_line) && out$status == 0
   res <- list(result=NULL, error=NULL)
 
   if(has_normal_end){
@@ -95,6 +95,8 @@ source_rcmd_batch <- function(path, echo=TRUE, tmp_dir=NULL, cmd_vanilla = FALSE
       if(was_killed) {
         res$error <- "KILLED"
         warning("Script killed!")
+      } else if(out$status != 0) {
+        res$error <- paste("Script stopped with exit status", out$status)
       } else {
         warning("Unknown reason for script to stop, without error/kill")
         res$error <- "UNDETECTED ERROR"

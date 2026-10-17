@@ -92,6 +92,32 @@ test_that("rpl_run_Rfiles internal and external agree on errors", {
   unlink(dir, recursive = TRUE)
 })
 
+test_that("rpl_run_Rfiles external reports each way a script can end", {
+  dir <- new_dir()
+  write_script(dir, "1_1_ok.R")
+  write_script(dir, "1_2_stop.R", code = "stop('boom')")
+  write_script(dir, "1_3_quit_status_1.R", code = "quit(save = 'no', status = 1)")
+  write_script(dir, "1_4_quit_status_0.R", code = "quit(save = 'no', status = 0)")
+  out <- rpl_run_Rfiles(rpl_list_Rfiles(dir), run_function = "external")
+
+  expect_equal(out$has_error, c(FALSE, TRUE, TRUE, FALSE))
+  expect_match(out$error[2], "boom")
+  expect_equal(out$error[3], "Script stopped with exit status 1")
+  expect_equal(is.na(out$elapsed), c(FALSE, TRUE, TRUE, FALSE))
+  unlink(dir, recursive = TRUE)
+})
+
+test_that("rpl_run_Rfiles external reports killed scripts", {
+  skip_on_os("windows")
+  dir <- new_dir()
+  write_script(dir, "1_1_killed.R", code = "tools::pskill(Sys.getpid(), tools::SIGKILL)")
+  expect_warning(out <- rpl_run_Rfiles(rpl_list_Rfiles(dir), run_function = "external"),
+                 "Script killed")
+  expect_true(out$has_error)
+  expect_equal(out$error, "KILLED")
+  unlink(dir, recursive = TRUE)
+})
+
 test_that("rpl_write overwrites with append = FALSE", {
   dir <- new_dir()
   write_script(dir, "1_1_a.R")
