@@ -78,7 +78,7 @@ Things to update with the rename:
 
 ## 5. Post errors to GitHub with the gh CLI
 
-Source: `BRA_IndirectSuppliers_GITHUB/CODE/999_code_check_investigate_errors.R`, called at the end of the BRA 998 when the machine is `maticloud`. What it does:
+Source: `BRA_IndirectSuppliers_GITHUB/CODE/999_code_check_investigate_errors.R`, called at the end of the BRA 998 when the machine is `maticloud`. Also look at `/home/matifou/Dropbox/Documents/Uni/GSEM/Projects/NASS_projects/defBias_replicate/code_setup/code_meta/992_send_issue_to_github.R`, which is probably the most advanced version (there are several such files in multiple projects). What it does:
 
 1. Reads the report and keeps the last session.
 2. Builds a summary (who ran it, on which machine, number of files, run time) and a `knitr::kable()` table of the errors.
@@ -89,10 +89,11 @@ Source: `BRA_IndirectSuppliers_GITHUB/CODE/999_code_check_investigate_errors.R`,
 To turn into a package function, e.g. `rpl_report_github(report, issue_title, repo = NULL, mentions = NULL)`:
 
 1. Remove the hard coded parts: issue title, the author to GitHub handle map (`"Matthieu" = "@MatthieuStigler"`, `"Sam" = "@sam-a-levy"`), the text "(California time)", the `CODE/999_...` path, and the `maticloud` condition (leave that to the master file).
-2. Use `gh issue list --json number,title,state` instead of parsing the text output with regexes. Note: on this machine plain `gh issue view` currently fails ("Projects (classic) is being deprecated"); asking for `--json` fields works.
+2. Do not use `--json` (decided 2026-10-25). Keep the tab output of `gh issue list` (number, state, title, labels, updated) and match the exact title between tab characters with `fixed()`. Note: on this machine plain `gh issue view` currently fails ("Projects (classic) is being deprecated"), so avoid `gh issue view`.
 3. Create the issue (`gh issue create`) instead of stopping when it does not exist.
-4. Check that gh is installed (`Sys.which("gh")`) and logged in (`gh auth status`) before calling it, and use `system2()` with an argument vector rather than `paste()`.
+4. Check that gh is installed (`Sys.which("gh")`) and logged in (`gh auth status`) before calling it, and use `system2()` with an argument vector rather than `paste()`. Every gh call goes through a helper that stops when the exit status is non-zero (`gh_run()` in defBias `992_send_issue_to_github.R`, decided 2026-10-25), so a failed list never looks like "no issue" and opens a duplicate.
 5. The comment table uses `dat_probs` (errors cut at 2000 characters) while the rest uses `dat_probs2`; keep a single table with an optional `max_chars` argument.
+6. Several issues with the same title (decided 2026-10-25, defBias `992_send_issue_to_github.R`): use the open one, and among open ones the lowest number; if none is open, the lowest closed one. Print a message listing all matches and the one used. Other duplicates are left alone, so they can be closed by hand.
 
 ## 6. Other matPkg issues to review
 
