@@ -1,8 +1,8 @@
 #' ---
 #' Title: "Light code"
-#' Author: "Matthieu"
+#' Author: "Jane Doe"
 #' Date: 2019-03-11
-#' runMat: TRUE
+#' run_replicate: TRUE
 #' custom_field: TRUE
 #' custom_field2: 2
 #' ---

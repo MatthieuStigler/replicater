@@ -10,7 +10,7 @@ test_that("rpl_list_Rfiles reports YAML header parse errors", {
   expect_true(is.na(good$error_parse))
   expect_true(bad$has_error_parse)
   expect_match(bad$error_parse, "Parser error")
-  expect_false(bad$has_yaml)
+  expect_false(bad$has_yaml_header)
   unlink(dir, recursive = TRUE)
 })
 
@@ -21,8 +21,8 @@ test_that("rpl_list_Rfiles without any parse error", {
   out <- rpl_list_Rfiles(dir)
   expect_equal(out$has_error_parse, c(FALSE, FALSE))
   expect_equal(out$error_parse, c(NA_character_, NA_character_))
-  expect_equal(out$has_yaml, c(TRUE, FALSE))
-  expect_equal(out$has_runMat, c(TRUE, FALSE))
+  expect_equal(out$has_yaml_header, c(TRUE, FALSE))
+  expect_equal(out$run_replicate, c(TRUE, NA))
   unlink(dir, recursive = TRUE)
 })
 
@@ -63,13 +63,37 @@ test_that("rpl_list_Rfiles handles recursive and old folders", {
   unlink(dir, recursive = TRUE)
 })
 
-test_that("rpl_list_Rfiles keeps extra YAML fields", {
+test_that("rpl_list_Rfiles keeps all YAML fields, and keep_field adds missing ones", {
   dir <- new_dir()
-  write_script(dir, "1_1_a.R", yaml = c("runMat: TRUE", "Author: \"Me\"", "run_replicate: FALSE"))
-  write_script(dir, "1_2_b.R", yaml = "runMat: TRUE")
-  out <- rpl_list_Rfiles(dir, keep_field = c("Author", "run_replicate"))
+  write_script(dir, "1_1_a.R", yaml = c("Author: \"Me\"", "run_replicate: FALSE"))
+  write_script(dir, "1_2_b.R", yaml = "Title: \"B\"")
+  out <- rpl_list_Rfiles(dir)
   expect_equal(out$Author, c("Me", NA))
+  expect_equal(out$Title, c(NA, "B"))
   expect_equal(out$run_replicate, c(FALSE, NA))
+  expect_equal(colnames(out)[ncol(out)], "full_path")
+
+  out_keep <- rpl_list_Rfiles(dir, keep_field = c("Author", "run_replicate_heavy"))
+  expect_equal(out_keep$run_replicate_heavy, c(NA, NA))
+  unlink(dir, recursive = TRUE)
+})
+
+test_that("rpl_list_Rfiles adds run_replicate when no script has it", {
+  dir <- new_dir()
+  write_script(dir, "1_1_a.R", yaml = "Title: \"A\"")
+  write_script(dir, "1_2_b.R", yaml = NULL)
+  out <- rpl_list_Rfiles(dir)
+  expect_equal(out$run_replicate, c(NA, NA))
+  unlink(dir, recursive = TRUE)
+})
+
+test_that("rpl_list_Rfiles warns when run_replicate is not TRUE or FALSE", {
+  dir <- new_dir()
+  write_script(dir, "1_1_a.R", yaml = "run_replicate: heavy")
+  write_script(dir, "1_2_b.R", yaml = "run_replicate: FALSE")
+  write_script(dir, "1_3_c.R", yaml = NULL)
+  expect_warning(out <- rpl_list_Rfiles(dir), "1_1_a.R")
+  expect_equal(out$run_replicate, c(NA, FALSE, NA))
   unlink(dir, recursive = TRUE)
 })
 

@@ -2,6 +2,7 @@
 
 export(rpl_add_info_last)
 export(rpl_check_deps)
+export(rpl_install_missing)
 export(rpl_list_Rfiles)
 export(rpl_run_Rfiles)
 export(rpl_showErr)

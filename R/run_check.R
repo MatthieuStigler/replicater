@@ -4,8 +4,17 @@
 ### Internal utilities
 ################################
 
-intrnl_dir_to_file <- function(dir) paste(dir, "999_CHECK_RUN_report.csv", sep = "/") %>%
-  str_replace("//", "/")
+intrnl_report_default <- "replication_report.csv"
+intrnl_report_old <- "999_CHECK_RUN_report.csv"
+
+## path of the report: report_file if given, else the default name, else the old
+## 999 name when only that file exists (keeps the history of older projects)
+intrnl_dir_to_file <- function(dir, report_file = NULL) {
+  files <- paste(dir, c(report_file, intrnl_report_default, intrnl_report_old), sep = "/") %>%
+    str_replace("//", "/")
+  if(!is.null(report_file)) return(files[1])
+  if(!file.exists(files[1]) && file.exists(files[2])) files[2] else files[1]
+}
 
 intrnl_cols_need <- c("session", "session_time",
                      "user_node",
@@ -14,8 +23,37 @@ intrnl_cols_need <- c("session", "session_time",
                      "elapsed", "memory_used_mb",
                      "user.self", "sys.self", "user.child",
                      "sys.child", "ext", "number_char", "number", "error_parse",
-                     "has_error_parse", "has_yaml", "has_runMat", "runMat_val",
+                     "has_error_parse", "has_yaml_header", "run_replicate",
                      "date", "time")
+
+## YAML field as logical (TRUE, FALSE or NA), warning about other values
+intrnl_field_to_lgl <- function(x, filename, field = "run_replicate") {
+  one_lgl <- function(v) if(length(v) == 1 && is.atomic(v)) as.logical(v) else NA
+  x_lgl <- if(is.list(x)) map_lgl(x, one_lgl) else as.logical(x)
+  x_given <- if(is.list(x)) !map_lgl(x, ~length(.) == 0 || (length(.) == 1 && is.na(.))) else !is.na(x)
+  x_bad <- x_given & is.na(x_lgl)
+  if(any(x_bad)) {
+    warning("YAML field '", field, "' should be TRUE or FALSE, other values are read as NA in: ",
+            paste(filename[x_bad], collapse = ", "), call. = FALSE)
+  }
+  x_lgl
+}
+
+## old report and new rows with different columns (older report format, other cols_extra):
+## bind them as text, after renaming has_yaml and dropping the old runMat columns when empty
+intrnl_report_merge <- function(file_out, df_new) {
+  df_old <- readr::read_csv(file_out, col_types = readr::cols(.default = "c"))
+  if("has_yaml" %in% colnames(df_old) && !"has_yaml_header" %in% colnames(df_old)) {
+    df_old <- rename(df_old, has_yaml_header = "has_yaml")
+  }
+  cols_old_empty <- intersect(c("has_runMat", "runMat_val"), colnames(df_old)) %>%
+    purrr::keep(~all(is.na(df_old[[.]])))
+  message("Report ", basename(file_out), " has other columns than the new rows: rewriting it with the columns of both")
+
+  dplyr::bind_rows(select(df_old, -tidyselect::all_of(cols_old_empty)),
+                   mutate(df_new, dplyr::across(tidyselect::everything(), as.character))) %>%
+    select(tidyselect::all_of(colnames(df_new)), tidyselect::everything())
+}
 
 
 intrnl_time_format <- function(x) {
@@ -76,7 +114,9 @@ rpl_parse_yaml <- function(file_path){
 #' @param dir_path directory of files
 #' @param no_old Avoid scripts in directory old?
 #' @param recursive Look into recursive folders?
-#' @param keep_field Additional YAML fields to keep
+#' @param keep_field YAML fields to return even when no script has them (filled
+#'   with `NA`). All YAML fields found in the scripts are returned anyway, and
+#'   `run_replicate` always is.
 #' @param check_numbers Whether to check if numbers are ambiguous?
 #' @export
 #' @rdname rpl_run_Rfiles
@@ -125,12 +165,18 @@ rpl_list_Rfiles <- function(dir_path="code_setup", no_old = TRUE, recursive=FALS
     res_yaml_df <- res_yaml_df%>%
       tidyr::unnest_wider("result")
   }
+  ## YAML fields: run_replicate, then all fields found, then keep_field (added if missing)
+  fields_all <- res$yaml %>%
+    map(~names(.$result)) %>%
+    unlist() %>%
+    c("run_replicate", ., keep_field) %>%
+    unique()
+  fields_miss <- setdiff(fields_all, colnames(res_yaml_df))
   res_yaml_df <- res_yaml_df %>%
-    tibble::add_column(!!!c(runMat=NA)[setdiff("runMat", colnames(.))]) %>% ## add if miss
-    mutate(has_runMat = !is.na(.data$runMat),
-           runMat_val = .data$runMat & !is.na(.data$runMat),
+    tibble::add_column(!!!rlang::rep_named(fields_miss, list(NA))) %>%
+    mutate(run_replicate = intrnl_field_to_lgl(.data$run_replicate, .data$filename),
            yaml=  purrr::transpose(res$yaml) %>% purrr::pluck("result"),
-           has_yaml=map_lgl(.data$yaml, ~ !rlang::is_empty(.)))
+           has_yaml_header=map_lgl(.data$yaml, ~ !rlang::is_empty(.)))
 
   if(!"error" %in% colnames(res_yaml_df)){
     res_yaml_df <- res_yaml_df %>%
@@ -146,8 +192,8 @@ rpl_list_Rfiles <- function(dir_path="code_setup", no_old = TRUE, recursive=FALS
   }
 
   vars <- c("filename", "ext", "folder", "subfolder", "number_char", "number",
-            "yaml", "error_parse", "has_error_parse", "has_yaml", "has_runMat",
-            "runMat_val", "full_path", keep_field)
+            "yaml", "error_parse", "has_error_parse", "has_yaml_header",
+            "full_path", fields_all)
   res_yaml_df <- res_yaml_df %>%
     select(tidyselect::all_of(vars)) %>%
     dplyr::relocate("full_path", .after = tidyselect::everything())
@@ -159,15 +205,19 @@ rpl_list_Rfiles <- function(dir_path="code_setup", no_old = TRUE, recursive=FALS
 }
 
 
-#' Run-check files 999 machinery
+#' Run all scripts of a project and report errors
 #'
 #' List R scripts with their YAML header (`rpl_list_Rfiles()`), run them
 #' (`rpl_run_Rfiles()`), show errors (`rpl_showErr()`) and write a report
-#' `999_CHECK_RUN_report.csv` (`rpl_write()`).
+#' `replication_report.csv` (`rpl_write()`).
+#'
+#' A script can be excluded from the run with the field `run_replicate: FALSE`
+#' in its YAML header.
 #'
 #' These functions were copied from the `mat_99_*` functions of the package matPkg.
 #' @param echo print which file done, and gc?
-#' @param runMat_true_only run only the ones with runMat: TRUE
+#' @param skip_false Skip the scripts with `run_replicate: FALSE` in their YAML
+#'   header? Scripts without the field are run.
 #' @param run_function use either source (internal) or R CMD BATCH (external)
 #' @param tmp_dir temporary dir to hold file when using `run_function="external"`
 #' @param run_cmd_vanilla when `run_function="external"`, should `--vanilla` be added?
@@ -190,13 +240,13 @@ rpl_list_Rfiles <- function(dir_path="code_setup", no_old = TRUE, recursive=FALS
 #' rpl_write(out, dir = path_temp)
 #'
 #' ## check output
-#' read_csv(paste(path_temp, "999_CHECK_RUN_report.csv", sep="/"), col_types = cols())
+#' read_csv(paste(path_temp, "replication_report.csv", sep="/"), col_types = cols())
 #'
 #' ## re-write
 #' rpl_write(out, dir = path_temp)
-#' read_csv(paste(path_temp, "999_CHECK_RUN_report.csv", sep="/"), col_types = cols())
+#' read_csv(paste(path_temp, "replication_report.csv", sep="/"), col_types = cols())
 #' @export
-rpl_run_Rfiles <- function(scripts_file, echo=FALSE, runMat_true_only=TRUE,
+rpl_run_Rfiles <- function(scripts_file, echo=FALSE, skip_false=TRUE,
                            run_function=c("internal", "external"), tmp_dir=NULL, run_cmd_vanilla = FALSE) {
 
   run_function <- match.arg(run_function)
@@ -208,10 +258,10 @@ rpl_run_Rfiles <- function(scripts_file, echo=FALSE, runMat_true_only=TRUE,
                          "internal"= function(x) source_throw(x, echo =echo),
                          "external"= function(x) source_rcmd_batch(x, tmp_dir=tmp_dir, cmd_vanilla=run_cmd_vanilla))
 
-  if(runMat_true_only) {
+  if(skip_false && "run_replicate" %in% colnames(scripts_file)) {
     scripts_file <- scripts_file %>%
-      filter(.data$runMat_val)
-    if(nrow(scripts_file)==0) stop("No R scripts with field 'runMat_val=TRUE', set argument 'runMat_true_only=FALSE' ?")
+      filter(!(.data$run_replicate %in% FALSE))
+    if(nrow(scripts_file)==0) stop("All R scripts have 'run_replicate: FALSE', set argument 'skip_false=FALSE' ?")
   }
 
   ## prep out data
@@ -284,14 +334,20 @@ rpl_showErr <- function(scripts_file_runned) {
 
 #' @param scripts_file file of R scripts with path to run, from `rpl_list_Rfiles()`
 #' @param scripts_file_runned data from `rpl_run_Rfiles()`
-#' @param append Overwrite existing or append?
+#' @param append Append to the existing report (default when it exists) or overwrite it?
+#'   When the existing report has other columns (older replicater version, other
+#'   `cols_extra`), it is rewritten with the columns of both.
 #' @param cols_extra Extra columns to keep
+#' @param report_file Name of the report file in `dir_path`. The default `NULL`
+#'   uses `replication_report.csv`, or `999_CHECK_RUN_report.csv` when only that
+#'   older file exists.
 #' @export
 #' @rdname rpl_run_Rfiles
 rpl_write <- function(scripts_file_runned, dir_path="code_setup",
-                      append=NULL, cols_extra = NULL) {
-  file_out <- intrnl_dir_to_file(dir_path)
-  if(is.null(append)) append <- file.exists(file_out)
+                      append=NULL, cols_extra = NULL, report_file = NULL) {
+  file_out <- intrnl_dir_to_file(dir_path, report_file)
+  if(is.null(append)) append <- TRUE
+  append <- append && file.exists(file_out)
   today <- Sys.Date() %>% as.character()
   user <- paste(Sys.info()[c("user", "nodename")], collapse = "@")
 
@@ -309,6 +365,15 @@ rpl_write <- function(scripts_file_runned, dir_path="code_setup",
            user_node =user) %>%
     select(tidyselect::all_of(c(intrnl_cols_need, cols_extra)))
 
+  ## existing report with other columns: rewrite it whole
+  if(append) {
+    cols_old <- colnames(readr::read_csv(file_out, n_max = 0, col_types = readr::cols()))
+    if(!identical(cols_old, colnames(df_new))) {
+      df_new <- intrnl_report_merge(file_out, df_new)
+      append <- FALSE
+    }
+  }
+
   readr::write_csv(df_new, file_out, append=append)
 
 }
@@ -318,8 +383,9 @@ rpl_write <- function(scripts_file_runned, dir_path="code_setup",
 #' so use the same `dir_path` in `rpl_list_Rfiles()` across runs.
 #' @export
 #' @rdname rpl_run_Rfiles
-rpl_add_info_last <- function(scripts_file_runned, dir_path="code_setup", warn=TRUE) {
-  file_out <- intrnl_dir_to_file(dir_path)
+rpl_add_info_last <- function(scripts_file_runned, dir_path="code_setup", warn=TRUE,
+                              report_file = NULL) {
+  file_out <- intrnl_dir_to_file(dir_path, report_file)
 
   if(file.exists(file_out)) {
     df_out <- readr::read_csv(file_out, col_types = readr::cols()) %>%

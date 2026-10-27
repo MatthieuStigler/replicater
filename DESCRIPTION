@@ -6,8 +6,9 @@ Authors@R:
     person("Matthieu", "Stigler", , "Matthieu.Stigler@example.com", role = c("aut", "cre"))
 Description: Thids package intends to replicate multiple scripts contained, and issue a tabular document reporting the errors encountered.
 License: MIT + file LICENSE
-Suggests: 
+Suggests:
     ggplot2,
+    pak,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Encoding: UTF-8

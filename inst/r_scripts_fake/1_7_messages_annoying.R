@@ -1,6 +1,6 @@
 #' ---
 #' Title: "Annoying message"
-#' Author: "Matthieu"
+#' Author: "Jane Doe"
 #' Date: 2019-03-11
 #' ---
 

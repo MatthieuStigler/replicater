@@ -3,19 +3,22 @@ path_rscripts <- system.file("r_scripts_fake", package = "replicater")
 files_err <- c("1_3_2_lightest_error_rLoEr.R", "1_3_light_error_rLoE.R", "1_8_parse_error.R")
 files_ok <- c("1_1_light_one_rLo.R", "1_4_sleep_3_rLoS.R")
 
-dir_dat <- rpl_list_Rfiles(path_rscripts, keep_field = "Author")
+dir_dat <- rpl_list_Rfiles(path_rscripts)
 
 test_that("rpl_list_Rfiles reads all scripts and their YAML", {
   expect_equal(nrow(dir_dat), 10)
-  expect_true(all(c("filename", "number", "has_yaml", "runMat_val", "full_path", "Author") %in% colnames(dir_dat)))
-  expect_equal(dir_dat$has_yaml, dir_dat$filename != "1_9_no_yaml.R")
+  expect_true(all(c("filename", "number", "has_yaml_header", "run_replicate", "full_path",
+                    "Author", "custom_field2") %in% colnames(dir_dat)))
+  expect_equal(dir_dat$has_yaml_header, dir_dat$filename != "1_9_no_yaml.R")
   expect_equal(dir_dat$number[dir_dat$filename == "1_3_2_lightest_error_rLoEr.R"], 1.32)
-  expect_equal(sum(dir_dat$runMat_val), 7)
+  expect_equal(sum(dir_dat$run_replicate, na.rm = TRUE), 7)
+  expect_equal(dir_dat$filename[dir_dat$run_replicate %in% FALSE], "1_5_SUPER_heavy_norun.R")
 })
 
 test_that("rpl_run_Rfiles internal detects errors", {
   out_int <- rpl_run_Rfiles(dir_dat)
-  expect_equal(nrow(out_int), 7)
+  expect_equal(nrow(out_int), 9)
+  expect_false("1_5_SUPER_heavy_norun.R" %in% out_int$filename)
   expect_true(all(out_int$has_error[out_int$filename %in% files_err]))
   expect_false(any(out_int$has_error[out_int$filename %in% files_ok]))
   expect_false(anyNA(out_int$elapsed[!out_int$has_error]))
@@ -43,7 +46,7 @@ test_that("rpl_write appends to the report", {
                             run_function = "external")
   rpl_write(out_ext, dir_path = dir_temp, cols_extra = "Author")
   rpl_write(out_ext, dir_path = dir_temp, cols_extra = "Author")
-  report <- readr::read_csv(file.path(dir_temp, "999_CHECK_RUN_report.csv"), show_col_types = FALSE)
+  report <- readr::read_csv(file.path(dir_temp, "replication_report.csv"), show_col_types = FALSE)
   expect_equal(nrow(report), 2 * nrow(out_ext))
   expect_equal(colnames(report), c(intrnl_cols_need, "Author"))
   expect_output(rpl_showErr(out_ext), "1_8_parse_error.R")
@@ -59,10 +62,10 @@ test_that("rpl_write appends to the report", {
 
 test_that("rpl_run_Rfiles argument checks", {
   dir <- new_dir()
-  write_script(dir, "1_1_a.R", yaml = "runMat: FALSE")
+  write_script(dir, "1_1_a.R", yaml = "run_replicate: FALSE")
   dat <- rpl_list_Rfiles(dir)
-  expect_error(rpl_run_Rfiles(dat), "No R scripts with field")
-  expect_warning(rpl_run_Rfiles(dat, runMat_true_only = FALSE, tmp_dir = dir),
+  expect_error(rpl_run_Rfiles(dat), "All R scripts have 'run_replicate: FALSE'")
+  expect_warning(rpl_run_Rfiles(dat, skip_false = FALSE, tmp_dir = dir),
                  "not relevant")
   unlink(dir, recursive = TRUE)
 })
@@ -124,8 +127,45 @@ test_that("rpl_write overwrites with append = FALSE", {
   out <- rpl_run_Rfiles(rpl_list_Rfiles(dir))
   rpl_write(out, dir_path = dir)
   rpl_write(out, dir_path = dir, append = FALSE)
-  report <- readr::read_csv(file.path(dir, "999_CHECK_RUN_report.csv"), show_col_types = FALSE)
+  report <- readr::read_csv(file.path(dir, "replication_report.csv"), show_col_types = FALSE)
   expect_equal(nrow(report), 1)
+
+  ## append = TRUE on a missing file still writes the header
+  rpl_write(out, dir_path = dir, append = TRUE, report_file = "other_report.csv")
+  report_other <- readr::read_csv(file.path(dir, "other_report.csv"), show_col_types = FALSE)
+  expect_equal(nrow(report_other), 1)
+  expect_equal(colnames(report_other), intrnl_cols_need)
+  unlink(dir, recursive = TRUE)
+})
+
+test_that("rpl_write continues an old 999 report and aligns its columns", {
+  dir <- new_dir()
+  write_script(dir, "1_1_a.R", code = "stop('old run fails')")
+  out <- rpl_run_Rfiles(rpl_list_Rfiles(dir))
+
+  ## old report: has_yaml, empty runMat columns, no run_replicate
+  rpl_write(out, dir_path = dir)
+  report_old <- readr::read_csv(file.path(dir, "replication_report.csv"), col_types = readr::cols(.default = "c")) |>
+    dplyr::rename(has_yaml = "has_yaml_header") |>
+    dplyr::mutate(has_runMat = NA, runMat_val = NA) |>
+    dplyr::select(-"run_replicate")
+  readr::write_csv(report_old, file.path(dir, "999_CHECK_RUN_report.csv"))
+  file.remove(file.path(dir, "replication_report.csv"))
+
+  Sys.sleep(0.01)
+  write_script(dir, "1_1_a.R")
+  expect_message(rpl_write(rpl_run_Rfiles(rpl_list_Rfiles(dir)), dir_path = dir),
+                 "rewriting it")
+  expect_false(file.exists(file.path(dir, "replication_report.csv")))
+  report <- readr::read_csv(file.path(dir, "999_CHECK_RUN_report.csv"), show_col_types = FALSE)
+  expect_equal(colnames(report), intrnl_cols_need)
+  expect_equal(report$has_error, c(TRUE, FALSE))
+  expect_equal(report$has_yaml_header, c(TRUE, TRUE))
+
+  ## next run appends to the aligned report, and the last run is read back
+  rpl_write(out, dir_path = dir)
+  expect_equal(nrow(readr::read_csv(file.path(dir, "999_CHECK_RUN_report.csv"), show_col_types = FALSE)), 3)
+  expect_equal(rpl_add_info_last(out, dir_path = dir)$has_error_last, TRUE)
   unlink(dir, recursive = TRUE)
 })
 

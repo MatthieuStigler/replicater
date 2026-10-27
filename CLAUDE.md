@@ -1,11 +1,11 @@
 # replicater: open issues and planned changes
 
-State as of 2026-10-17. replicater currently holds `rpl_list_Rfiles()`, `rpl_run_Rfiles()`, `rpl_showErr()`, `rpl_write()`, `rpl_add_info_last()` (copied from matPkg `mat_99_*`) and `rpl_check_deps()`.
+State as of 2026-10-27. replicater currently holds `rpl_list_Rfiles()`, `rpl_run_Rfiles()`, `rpl_showErr()`, `rpl_write()`, `rpl_add_info_last()` (copied from matPkg `mat_99_*`), `rpl_check_deps()` and `rpl_install_missing()`. Next steps: section 2 (decide and build), then sections 4 to 6 (kept for later on purpose).
 
-## 1. Open GitHub issues
+## 1. GitHub issues (both fixed on 2026-10-27, to close once committed)
 
-1. **#2 991 script never reads the previous report** (to fix). In `defBias_replicate/code_setup/code_meta/991_rerun_ALL.R`, the "Add previous info" block reads `code_meta/999_CHECK_RUN_report.csv`, but the report is written to `code_setup/code_meta/`. So `has_error_run_before` is never created. Fixing only the path is not enough: the join turns the factor `folder` into character, and `arrange(folder, filename)` would then run `./code_analysis` before `./code_setup`. Fix: correct both paths and move `fct_relevel()` after the join (as in the BRA 998 script), or replace the block with `rpl_add_info_last(dat_files, dir_path = "code_setup/code_meta", warn = FALSE)`, which keeps the factor order (column then called `has_error_last`). The bug is in the project script, not in the package, but it is a direct argument for the unified master file of section 2.
-2. **#1 Feature: add function to install missing packages.** Today each project does it its own way: 991 installs Windows binaries into `Y:/shared_projects/R_shared_lib/<R version>`, the BRA 998 prints a `sudo apt install r-cran-...` line. A `rpl_install_missing()` could take the output of `rpl_check_deps()` and a method (`"install.packages"`, `"apt"`, `"pak"`), with an optional `lib` path.
+1. **#2 991 script never reads the previous report.** Fixed in `defBias_replicate/code_setup/code_meta/991_rerun_ALL.R`: both paths now `code_setup/code_meta/`, and `fct_relevel()` moved after the join (into `files_check`). Checked by running the listing and join steps: `has_error_run_before` is filled and `./code_setup` still runs first. The script still uses matPkg. The same bug exists in other copies, see section 2.3.
+2. **#1 install missing packages.** Done: `rpl_install_missing(pkgs, method = c("install.packages", "pak", "apt"), lib = NULL, ...)`. `"apt"` only prints the `sudo apt install r-cran-...` command (no `--ignore-missing`: that flag is about download failures, it does not skip unknown packages). `...` goes to `install.packages()` / `pak::pkg_install()`, e.g. `type = "binary"` for the defBias Windows setup.
 
 ## 2. Unified master file (open question)
 
@@ -44,33 +44,29 @@ Common skeleton of both files:
 
 Suggestion (to discuss): option 2, possibly with option 3 later. A fix like issue #2 is then made once in the package instead of in every copy.
 
+### 2.3 Proposal (2026-10-27, to discuss)
+
+Other copies besides defBias 991 and BRA 998: integr_chain `code/code_meta/991_rerun_ALL.R`, EUleaks_trade_model and EUleaks_replicate_CDS `991_code_rerun_scripts.R`, Brazil GE `code_meta/1_0_rerun_ALL.R`. Three of them (integr_chain, EUleaks_replicate_CDS, Brazil GE) read the previous report from another folder than the one they write it to, the issue #2 bug again (checked 2026-10-27, not fixed). All of them still run on matPkg `mat_99_*` and only call `rpl_check_deps()` from replicater.
+
+Two step API rather than one wrapper with many arguments:
+
+1. `rpl_scripts(dir_path, report_dir, exclude, folder_order, skip_false = TRUE)`: skeleton steps 1, 2 and 4. Lists the scripts, adds the previous run, filters and orders them (folder order, then file number, which needs section 4). Returns the table of scripts to run, to inspect or filter further with plain dplyr (BRA `run_replicate_heavy`, ad hoc file names).
+2. `rpl_replicate(scripts, report_dir, install = "none", lib = NULL, run_function = "external", cols_extra = "Author", ...)`: steps 3, 5, 6 and 7. Checks (and optionally installs) the packages of the scripts that will run, runs them with `.Rout` files in `<report_dir>/sessions/session_YYYY_MM_DD/`, writes the report, prints errors, slow scripts and total time.
+3. `rpl_report_github()` (section 5) stays separate, called by the master file when wanted (e.g. on `maticloud`).
+
+`report_dir` is one argument used both to read and to write the report, which removes the issue #2 bug by design. Project specific steps (BRA sources `0_5_archive_output.R` first) stay in the master file. Config file (option 3) only if the master files still differ after this.
+
 ## 3. Remove idiosyncrasies of my own workflow
 
-### 3.1 `runMat` and the columns built on it
+Done in the package on 2026-10-27 (details in `NEWS.md`):
 
-Names to change (proposals, not decided):
+1. YAML field `run_replicate` replaces `runMat`; columns `has_runMat` and `runMat_val` dropped (settles matPkg issue #58); `has_yaml` renamed `has_yaml_header`. `run_replicate` is always returned, as logical, with a warning for values other than TRUE or FALSE.
+2. `rpl_run_Rfiles(skip_false = TRUE)` replaces `runMat_true_only`: runs every script except `run_replicate: FALSE`. The old "only TRUE" mode is gone (filter beforehand if needed).
+3. YAML fields (decided 2026-10-27): `rpl_list_Rfiles()` returns all fields; `keep_field` only adds fields that no script has, as `NA`, so master files can rely on e.g. `run_replicate_heavy` existing.
+4. Report `replication_report.csv`, argument `report_file`, and fall back to `999_CHECK_RUN_report.csv` when only that one exists. `rpl_write()` rewrites the report with the columns of both when the old file has other columns (renames `has_yaml`, drops `has_runMat`/`runMat_val` when all `NA`), so old reports keep working without a manual migration.
+5. Files renamed `R/run_check.R` and `R/source_scripts.R`; help title "Run all scripts of a project and report errors"; fake scripts use `run_replicate` and `Author: "Jane Doe"`.
 
-| Current | Where | Proposal |
-|---|---|---|
-| YAML field `runMat` | scripts, `rpl_list_Rfiles()` | `run_replicate`, already used by both projects |
-| `has_runMat` | column | drop, or `has_run_replicate` |
-| `runMat_val` | column | drop: use the `run_replicate` column itself (`NA` when missing) |
-| `runMat_true_only` | argument of `rpl_run_Rfiles()` | e.g. `skip_false = TRUE`, running every script except those with `run_replicate: FALSE`, which is what both projects do by hand |
-| `has_yaml` | column | e.g. `has_yaml_header` |
-
-Things to update with the rename:
-
-1. `intrnl_cols_need` requires `has_runMat` and `runMat_val`. That is why both master files do `mutate(has_runMat = NA, runMat_val = NA)` before writing, with the comment "fix as function is not flexible". The new column list should drop them.
-2. Old reports (`999_CHECK_RUN_report.csv` in both projects, several sessions each) use the old column names; reading them must keep working, or a one off migration is needed.
-3. The fake scripts in `inst/r_scripts_fake/` use `runMat` and `Author: "Matthieu"`.
-4. This also settles matPkg issue #58 ("should return NA for runMat_val if has_runMat=FALSE").
-
-### 3.2 Remove the 999 mark
-
-1. The report name `999_CHECK_RUN_report.csv` is hard coded in `intrnl_dir_to_file()`. Proposal: a neutral default (e.g. `replication_report.csv`) plus a `report_file` argument, and fall back to the old name when it exists so the history of existing projects is not lost.
-2. Package files `R/99_run_check.R` and `R/999_source.R` → e.g. `R/run_check.R` and `R/source_scripts.R`.
-3. Help page title "Run-check files 999 machinery" → e.g. "Run all scripts of a project and report errors".
-4. On the project side (not the package): driver names `991_`, `998_`, `999_` and the folders `code_meta_replicate` / `CODE_meta_replicate`.
+Still to do, on the project side, when moving the master files to section 2: driver names `991_`, `998_`, `999_` and the folders `code_meta_replicate` / `CODE_meta_replicate`.
 
 ## 4. Number parsing (matPkg issue #69, still applies)
 
@@ -108,8 +104,9 @@ Issues opened on matPkg about these functions, not reviewed yet unless stated:
 7. #42 "999: few changes" and #25 "999 printing".
 8. #49 "mat_99_check_there_update: update folder/subfolder": `mat_99_check_there_update()` was not ported.
 
-## 7. Differences with matPkg (as of 2026-10-17)
+## 7. Differences with matPkg (as of 2026-10-27)
 
 1. Fixed in both packages: the `--vanila` typo in `source_rcmd_batch()`, and the inverted `if_else()` that left `error_parse` always `NA`.
 2. replicater only: external runs check the exit status (`quit(status = 1)` was reported as success); `rpl_add_info_last()` matches on `filename` and `folder`, keeps a factor `folder` and accepts `rpl_run_Rfiles()` output.
-3. Not ported: `mat_99_check_there_update()`, `mat_99_arrange_by_last()`, the deprecated wrappers and `as.data.frame.proc_time()`.
+3. replicater only, since 2026-10-27: the section 3 renames (`run_replicate`, `skip_false`, `has_yaml_header`, `replication_report.csv`), so master files moving from matPkg to replicater must drop `select(-has_runMat, -runMat_val)`, `mutate(has_runMat = NA, runMat_val = NA)` and `runMat_true_only = FALSE`.
+4. Not ported: `mat_99_check_there_update()`, `mat_99_arrange_by_last()`, the deprecated wrappers and `as.data.frame.proc_time()`.

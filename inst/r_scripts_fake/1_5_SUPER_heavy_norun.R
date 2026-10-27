@@ -1,8 +1,8 @@
 #' ---
 #' Title: "Heavy code"
-#' Author: "Matthieu"
+#' Author: "Jane Doe"
 #' Date: 2019-03-11
-#' runMat: FALSE
+#' run_replicate: FALSE
 #' ---
 
 

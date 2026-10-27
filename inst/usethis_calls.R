@@ -13,3 +13,4 @@ for(pkg in c("callr", "dplyr", "knitr", "lobstr", "magrittr", "purrr", "readr",
   usethis::use_package(pkg)
 }
 usethis::use_package("ggplot2", type = "Suggests")
+usethis::use_package("pak", type = "Suggests")
