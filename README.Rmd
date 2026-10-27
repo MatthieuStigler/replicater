@@ -1,5 +1,7 @@
 ---
-output: github_document
+output:
+  github_document:
+    pandoc_args: ["--wrap=none"]
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -20,7 +22,7 @@ knitr::opts_chunk$set(
 [![CRAN status](https://www.r-pkg.org/badges/version/replicater)](https://CRAN.R-project.org/package=replicater)
 <!-- badges: end -->
 
-The goal of replicater is to allow to replicate an R project, and obtain a document listing all errors encountered while re-runing each file.
+The goal of replicater is to check that an R project still runs from start to end. It runs every script of the project in a fresh R session, and writes a report with the errors and run time of each script, which can be compared with the previous run.
 
 ## Installation
 
@@ -30,12 +32,102 @@ You can install the development version of replicater like so:
 remotes::install_github("MatthieuStigler/replicater", upgrade = "never")
 ```
 
+## How it works
+
+1. Each script starts with a YAML header written with `#'` lines (as read by `knitr::spin()`). The field `run_replicate: FALSE` excludes a script from the run, for example a script that is too slow or that needs data you cannot share. Scripts without the field are run.
+
+``` r
+#' ---
+#' Title: "Clean the raw data"
+#' Author: "Jane Doe"
+#' run_replicate: TRUE
+#' ---
+```
+
+2. A master script lists the scripts, installs the missing packages, runs the scripts in order and appends the result to the report `replication_report.csv`.
+3. On the next run, the report tells which scripts failed or were slow the previous time.
+
 ## Example
 
-This is a basic example which shows you how to solve a common problem:
+The package ships 10 small scripts, some of them failing on purpose.
 
-```{r example}
+```{r libs, message = FALSE}
 library(replicater)
-## basic example code
+library(dplyr)
+```
+
+**1. List the scripts**, with all the fields of their YAML header:
+
+```{r list}
+path_scripts <- system.file("r_scripts_fake", package = "replicater")
+
+scripts <- rpl_list_Rfiles(path_scripts)
+scripts %>%
+  select(filename, number, has_yaml_header, run_replicate, Author)
+```
+
+**2. Check the packages** used by the scripts. `rpl_check_deps()` returns the missing ones (`NA` when none is missing), to pass to `rpl_install_missing()`:
+
+```{r deps, results = "hide", message = FALSE}
+pkg_miss <- rpl_check_deps(path_scripts)
+```
+
+```{r install, eval = FALSE}
+rpl_install_missing(pkg_miss)                  # with install.packages()
+rpl_install_missing(pkg_miss, method = "pak")  # with pak::pkg_install()
+rpl_install_missing(pkg_miss, method = "apt")  # prints the "sudo apt install r-cran-..." command
+```
+
+**3. Run the scripts**, each in a new R session (`run_function = "external"`). The `.Rout` file of each script is kept in `tmp_dir`. The script with `run_replicate: FALSE` is skipped:
+
+```{r run, results = "hide"}
+dir_session <- file.path(tempdir(), "session_1")
+dir.create(dir_session)
+out <- rpl_run_Rfiles(scripts, run_function = "external", tmp_dir = dir_session)
+```
+
+```{r out}
+out %>%
+  select(filename, has_error, elapsed)
+```
+
+**4. Show the errors:**
+
+```{r errors}
+rpl_showErr(out)
+```
+
+**5. Write the report.** Each run is appended to `replication_report.csv` in `dir_path`. On the next run, `rpl_add_info_last()` adds the result of the last run to the list of scripts:
+
+```{r write}
+dir_report <- tempdir()
+rpl_write(out, dir_path = dir_report, cols_extra = "Author")
+
+rpl_list_Rfiles(path_scripts) %>%
+  rpl_add_info_last(dir_path = dir_report) %>%
+  select(filename, run_replicate, elapsed_last, has_error_last)
+```
+
+## In a project
+
+Put these steps in a master script, run from the project root. Give the master script itself `run_replicate: FALSE` in its YAML header, so it does not run itself:
+
+```{r master, eval = FALSE}
+library(replicater)
+library(dplyr)
+
+scripts <- rpl_list_Rfiles("code", recursive = TRUE) %>%
+  rpl_add_info_last(dir_path = "code/code_meta", warn = FALSE)
+
+rpl_check_deps("code") %>%
+  rpl_install_missing()
+
+dir_session <- paste0("code/code_meta/session_", Sys.Date())
+dir.create(dir_session, recursive = TRUE, showWarnings = FALSE)
+out <- rpl_run_Rfiles(scripts, echo = TRUE, run_function = "external",
+                      tmp_dir = dir_session)
+
+rpl_showErr(out)
+rpl_write(out, dir_path = "code/code_meta", cols_extra = "Author")
 ```
 
