@@ -1,5 +1,11 @@
 # replicater (development version)
 
+* New verbs for the master script: `rpl_set_dirs()` sets the folders of the report and of the `.Rout` files once, then `rpl_list_scripts()` lists the scripts in run order (order of `dir_path`, then folder and file name) with the last run, and `rpl_replicate()` checks or installs the packages, runs the scripts, writes the report and prints a summary (new errors, fixed scripts, slowest scripts).
+* `rpl_write()` and `rpl_add_info_last()`: `dir_path` defaults to the folder set by `rpl_set_dirs()` (still `"code_setup"` when not set).
+* `rpl_add_info_last()` matches `./code_setup` with `code_setup`, and keeps `folder` as it is.
+* `rpl_check_deps()`: `...` passed to `renv::dependencies()`, e.g. `quiet = TRUE, errors = "ignored"`.
+* Fix: `rpl_run_Rfiles(echo = FALSE)` still printed for external runs.
+* Fix: an empty script was reported as a YAML parse error.
 * `rpl_install_missing()`: install the packages found by `rpl_check_deps()`, with `install.packages()` or pak, or print the `sudo apt install r-cran-...` command (#1).
 * Remove the names specific to my own workflow (breaking changes):
   * YAML field `runMat` replaced by `run_replicate`. Columns `has_runMat` and `runMat_val` dropped: use the `run_replicate` column itself (`NA` when the field is missing). Column `has_yaml` renamed `has_yaml_header`.
