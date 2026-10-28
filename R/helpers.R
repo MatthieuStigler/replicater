@@ -1,10 +1,12 @@
 #' Check dependencies in package
 #'
-#' @param path_scripts path where the scripts are located
+#' @param path_scripts path where the scripts are located: folders or files
+#' @param ... passed to `renv::dependencies()`, e.g. `quiet = TRUE, errors = "ignored"`
+#'   to hide the parse errors of the scripts
 #' @export
-rpl_check_deps <- function(path_scripts="."){
+rpl_check_deps <- function(path_scripts=".", ...){
   ## check packages
-  rnv_scripts <- renv::dependencies(path_scripts)
+  rnv_scripts <- renv::dependencies(path_scripts, ...)
   all_pkgs <- unique(rnv_scripts$Package)
 
   ## check installed

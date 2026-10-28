@@ -4,10 +4,13 @@
 \alias{rpl_check_deps}
 \title{Check dependencies in package}
 \usage{
-rpl_check_deps(path_scripts = ".")
+rpl_check_deps(path_scripts = ".", ...)
 }
 \arguments{
-\item{path_scripts}{path where the scripts are located}
+\item{path_scripts}{path where the scripts are located: folders or files}
+
+\item{...}{passed to \code{renv::dependencies()}, e.g. \verb{quiet = TRUE, errors = "ignored"}
+to hide the parse errors of the scripts}
 }
 \description{
 Check dependencies in package

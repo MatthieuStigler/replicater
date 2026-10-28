@@ -6,6 +6,14 @@ test_that("multiplication works", {
 
 })
 
+test_that("rpl_check_deps can hide the renv output on scripts with parse errors", {
+  dir <- new_dir()
+  write_script(dir, "1_1_a.R", code = c("library(stats)", "@"))
+  expect_output(suppressMessages(rpl_check_deps(dir)), "problems")
+  expect_output(suppressMessages(rpl_check_deps(dir, quiet = TRUE, errors = "ignored")), NA)
+  unlink(dir, recursive = TRUE)
+})
+
 test_that("rpl_install_missing with apt only prints the command", {
   expect_message(cmd <- rpl_install_missing(c("sf", "RSQLite", NA, "sf"), method = "apt"),
                  "sudo apt install r-cran-sf r-cran-rsqlite")
