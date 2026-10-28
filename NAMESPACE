@@ -2,9 +2,13 @@
 
 export(rpl_add_info_last)
 export(rpl_check_deps)
+export(rpl_get_dirs)
 export(rpl_install_missing)
 export(rpl_list_Rfiles)
+export(rpl_list_scripts)
+export(rpl_replicate)
 export(rpl_run_Rfiles)
+export(rpl_set_dirs)
 export(rpl_showErr)
 export(rpl_write)
 importFrom(dplyr,
