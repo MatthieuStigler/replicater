@@ -44,8 +44,8 @@ remotes::install_github("MatthieuStigler/replicater", upgrade = "never")
 #' ---
 ```
 
-2. A master script lists the scripts, installs the missing packages, runs the scripts in order and appends the result to the report `replication_report.csv`.
-3. On the next run, the report tells which scripts failed or were slow the previous time.
+2. A master script sets the folders of the report (`rpl_set_dirs()`), then pipes two verbs: `rpl_list_scripts()` lists the scripts in the order they will run, and `rpl_replicate()` installs the missing packages, runs the scripts and appends the run to the report `replication_report.csv`.
+3. On the next run, the scripts that failed or got fixed since the previous run are reported.
 
 ## Example
 
@@ -56,78 +56,56 @@ library(replicater)
 library(dplyr)
 ```
 
-**1. List the scripts**, with all the fields of their YAML header:
+**1. Set the folders** of the report and of the `.Rout` files (here a temporary folder; in a project, e.g. `"code_meta"`):
+
+```{r dirs}
+rpl_set_dirs(report_dir = tempdir())
+```
+
+**2. List the scripts** in the order they will run, with all the fields of their YAML header. The table can be filtered further with dplyr before running:
 
 ```{r list}
 path_scripts <- system.file("r_scripts_fake", package = "replicater")
 
-scripts <- rpl_list_Rfiles(path_scripts)
+scripts <- rpl_list_scripts(path_scripts)
 scripts %>%
-  select(filename, number, has_yaml_header, run_replicate, Author)
+  select(filename, has_yaml_header, run_replicate, Author)
 ```
 
-**2. Check the packages** used by the scripts. `rpl_check_deps()` returns the missing ones (`NA` when none is missing), to pass to `rpl_install_missing()`:
+**3. Run the scripts**, each in a new R session. The script with `run_replicate: FALSE` is skipped. The run is appended to the report, and a summary is printed:
 
-```{r deps, results = "hide", message = FALSE}
-pkg_miss <- rpl_check_deps(path_scripts)
+```{r run}
+out <- scripts %>%
+  rpl_replicate(echo = FALSE)
 ```
 
-```{r install, eval = FALSE}
-rpl_install_missing(pkg_miss)                  # with install.packages()
-rpl_install_missing(pkg_miss, method = "pak")  # with pak::pkg_install()
-rpl_install_missing(pkg_miss, method = "apt")  # prints the "sudo apt install r-cran-..." command
-```
+**4. Next time**, `rpl_list_scripts()` adds the result of the last run:
 
-**3. Run the scripts**, each in a new R session (`run_function = "external"`). The `.Rout` file of each script is kept in `tmp_dir`. The script with `run_replicate: FALSE` is skipped:
-
-```{r run, results = "hide"}
-dir_session <- file.path(tempdir(), "session_1")
-dir.create(dir_session)
-out <- rpl_run_Rfiles(scripts, run_function = "external", tmp_dir = dir_session)
-```
-
-```{r out}
-out %>%
-  select(filename, has_error, elapsed)
-```
-
-**4. Show the errors:**
-
-```{r errors}
-rpl_showErr(out)
-```
-
-**5. Write the report.** Each run is appended to `replication_report.csv` in `dir_path`. On the next run, `rpl_add_info_last()` adds the result of the last run to the list of scripts:
-
-```{r write}
-dir_report <- tempdir()
-rpl_write(out, dir_path = dir_report, cols_extra = "Author")
-
-rpl_list_Rfiles(path_scripts) %>%
-  rpl_add_info_last(dir_path = dir_report) %>%
+```{r rerun}
+rpl_list_scripts(path_scripts) %>%
   select(filename, run_replicate, elapsed_last, has_error_last)
 ```
 
+`rpl_replicate()` chains functions that can also be used on their own: `rpl_check_deps()` and `rpl_install_missing()` (packages), `rpl_run_Rfiles()` (run), `rpl_showErr()` (errors), `rpl_write()` (report) and `rpl_add_info_last()` (previous run).
+
 ## In a project
 
-Put these steps in a master script, run from the project root. Give the master script itself `run_replicate: FALSE` in its YAML header, so it does not run itself:
+A master script, run from the project root, e.g. `code_meta/replicate_all.R`. Its own `run_replicate: FALSE` makes sure it never runs itself:
 
 ```{r master, eval = FALSE}
+#' ---
+#' Title: "Rerun all scripts of the project and report errors"
+#' run_replicate: FALSE
+#' ---
+
 library(replicater)
 library(dplyr)
 
-scripts <- rpl_list_Rfiles("code", recursive = TRUE) %>%
-  rpl_add_info_last(dir_path = "code/code_meta", warn = FALSE)
+rpl_set_dirs(report_dir = "code_meta")
 
-rpl_check_deps("code") %>%
-  rpl_install_missing()
+scripts <- rpl_list_scripts(c("code_setup", "code_analysis"), exclude = "888")
 
-dir_session <- paste0("code/code_meta/session_", Sys.Date())
-dir.create(dir_session, recursive = TRUE, showWarnings = FALSE)
-out <- rpl_run_Rfiles(scripts, echo = TRUE, run_function = "external",
-                      tmp_dir = dir_session)
-
-rpl_showErr(out)
-rpl_write(out, dir_path = "code/code_meta", cols_extra = "Author")
+out <- scripts %>%
+  rpl_replicate(install = "pak")
 ```
 
