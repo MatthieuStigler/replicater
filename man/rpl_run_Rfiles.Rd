@@ -29,7 +29,7 @@ rpl_showErr(scripts_file_runned)
 
 rpl_write(
   scripts_file_runned,
-  dir_path = "code_setup",
+  dir_path = rpl_get_dirs()$report_dir,
   append = NULL,
   cols_extra = NULL,
   report_file = NULL
@@ -37,7 +37,7 @@ rpl_write(
 
 rpl_add_info_last(
   scripts_file_runned,
-  dir_path = "code_setup",
+  dir_path = rpl_get_dirs()$report_dir,
   warn = TRUE,
   report_file = NULL
 )
@@ -93,8 +93,8 @@ in its YAML header.
 
 These functions were copied from the \verb{mat_99_*} functions of the package matPkg.
 
-\code{rpl_add_info_last()} matches scripts on \code{filename} and \code{folder},
-so use the same \code{dir_path} in \code{rpl_list_Rfiles()} across runs.
+\code{rpl_add_info_last()} matches scripts on \code{filename} and \code{folder}
+(ignoring a leading \verb{./}), so list the scripts from the same place across runs.
 }
 \examples{
 library(replicater)

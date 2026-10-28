@@ -26,6 +26,16 @@ test_that("rpl_list_Rfiles without any parse error", {
   unlink(dir, recursive = TRUE)
 })
 
+test_that("rpl_list_Rfiles reads an empty script as having no YAML header", {
+  dir <- new_dir()
+  write_script(dir, "1_1_good.R")
+  file.create(file.path(dir, "1_2_empty.R"))
+  out <- rpl_list_Rfiles(dir)
+  expect_equal(out$has_error_parse, c(FALSE, FALSE))
+  expect_equal(out$has_yaml_header, c(TRUE, FALSE))
+  unlink(dir, recursive = TRUE)
+})
+
 test_that("rpl_list_Rfiles warns on ambiguous numbers", {
   dir <- new_dir()
   write_script(dir, "1_1_a.R")

@@ -26,6 +26,9 @@ intrnl_cols_need <- c("session", "session_time",
                      "has_error_parse", "has_yaml_header", "run_replicate",
                      "date", "time")
 
+## folder without leading "./", to match "./code_setup" with "code_setup"
+intrnl_folder_key <- function(folder) str_replace(as.character(folder), "^\\./", "")
+
 ## YAML field as logical (TRUE, FALSE or NA), warning about other values
 intrnl_field_to_lgl <- function(x, filename, field = "run_replicate") {
   one_lgl <- function(v) if(length(v) == 1 && is.atomic(v)) as.logical(v) else NA
@@ -97,6 +100,7 @@ intrnl_err_to_chr <- function(x){
 rpl_parse_yaml <- function(file_path){
   ## remove #' to have standard YAMl header
   input_lines <- readLines(file_path, warn=FALSE)
+  if(length(input_lines) == 0) return(list()) ## empty script: no header
   input_lines <- knitr::spin(text = input_lines, knit = FALSE)
   tmp <- tempfile()
   writeLines(input_lines, tmp)
@@ -256,7 +260,7 @@ rpl_run_Rfiles <- function(scripts_file, echo=FALSE, skip_false=TRUE,
   }
   run_function <- switch(run_function,
                          "internal"= function(x) source_throw(x, echo =echo),
-                         "external"= function(x) source_rcmd_batch(x, tmp_dir=tmp_dir, cmd_vanilla=run_cmd_vanilla))
+                         "external"= function(x) source_rcmd_batch(x, echo = echo, tmp_dir=tmp_dir, cmd_vanilla=run_cmd_vanilla))
 
   if(skip_false && "run_replicate" %in% colnames(scripts_file)) {
     scripts_file <- scripts_file %>%
@@ -343,7 +347,7 @@ rpl_showErr <- function(scripts_file_runned) {
 #'   older file exists.
 #' @export
 #' @rdname rpl_run_Rfiles
-rpl_write <- function(scripts_file_runned, dir_path="code_setup",
+rpl_write <- function(scripts_file_runned, dir_path=rpl_get_dirs()$report_dir,
                       append=NULL, cols_extra = NULL, report_file = NULL) {
   file_out <- intrnl_dir_to_file(dir_path, report_file)
   if(is.null(append)) append <- TRUE
@@ -379,29 +383,27 @@ rpl_write <- function(scripts_file_runned, dir_path="code_setup",
 }
 
 #' @param warn Should it warn if file is actually missing?
-#' @details `rpl_add_info_last()` matches scripts on `filename` and `folder`,
-#' so use the same `dir_path` in `rpl_list_Rfiles()` across runs.
+#' @details `rpl_add_info_last()` matches scripts on `filename` and `folder`
+#' (ignoring a leading `./`), so list the scripts from the same place across runs.
 #' @export
 #' @rdname rpl_run_Rfiles
-rpl_add_info_last <- function(scripts_file_runned, dir_path="code_setup", warn=TRUE,
+rpl_add_info_last <- function(scripts_file_runned, dir_path=rpl_get_dirs()$report_dir, warn=TRUE,
                               report_file = NULL) {
   file_out <- intrnl_dir_to_file(dir_path, report_file)
 
   if(file.exists(file_out)) {
     df_out <- readr::read_csv(file_out, col_types = readr::cols()) %>%
       filter(.data$time==max(.data$time)) %>%
-      select("filename", "folder",
-             elapsed_last = "elapsed",
-             has_error_last = "has_error")
+      dplyr::transmute(filename = .data$filename,
+                       folder_key = intrnl_folder_key(.data$folder),
+                       elapsed_last = .data$elapsed,
+                       has_error_last = .data$has_error)
 
-    ## keep folder as factor if it is one (a join with character would turn it into character)
-    if(is.factor(scripts_file_runned$folder)) {
-      df_out <- df_out %>%
-        mutate(folder = factor(.data$folder, levels = levels(scripts_file_runned$folder)))
-    }
-
+    ## join on a separate key, so folder stays as it is (e.g. a factor)
     scripts_file_runned <- scripts_file_runned %>%
-      left_join(df_out, by = c("filename", "folder"))
+      mutate(folder_key = intrnl_folder_key(.data$folder)) %>%
+      left_join(df_out, by = c("filename", "folder_key")) %>%
+      select(-"folder_key")
   } else {
     if(warn) warning("File not already there!")
   }
