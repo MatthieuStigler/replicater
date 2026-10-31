@@ -34,7 +34,7 @@ remotes::install_github("MatthieuStigler/replicater", upgrade = "never")
 
 ## How it works
 
-1. Each script starts with a YAML header written with `#'` lines (as read by `knitr::spin()`). The field `run_replicate: FALSE` excludes a script from the run, for example a script that is too slow or that needs data you cannot share. Scripts without the field are run.
+1. **Each script** starts with a YAML header written with `#'` lines (as read by `knitr::spin()`). The field `run_replicate: FALSE` excludes a script from the run, for example a script that is too slow or that needs data you cannot share. Scripts without the field are run.
 
 ``` r
 #' ---
@@ -44,68 +44,114 @@ remotes::install_github("MatthieuStigler/replicater", upgrade = "never")
 #' ---
 ```
 
-2. A master script sets the folders of the report (`rpl_set_dirs()`), then pipes two verbs: `rpl_list_scripts()` lists the scripts in the order they will run, and `rpl_replicate()` installs the missing packages, runs the scripts and appends the run to the report `replication_report.csv`.
-3. On the next run, the scripts that failed or got fixed since the previous run are reported.
+2. **A master script**, run from the project root, sets the output folders with `rpl_set_dirs()`, then pipes one verb per step:
+
+| Verb | What it does |
+|---|---|
+| `rpl_list_scripts()` | lists the R scripts with their YAML fields, in the order they will run |
+| `rpl_add_last_run()` | adds the result of the last run, read from the replication report |
+| `rpl_check_packages()` | lists the packages needed by the scripts that are not installed, and can install them |
+| `rpl_run_scripts()` | runs each script in a new R session and archives its output |
+| `rpl_write_report()` | appends the run to the replication report |
+| `rpl_print_summary()` | prints the errors, the scripts that broke or got fixed since the last run, and the slowest scripts |
+
+Outside the pipe, `rpl_read_report()` reads the replication report back.
+
+## What is written on disk
+
+`rpl_set_dirs(report_dir = "code_meta")` writes nothing itself: it tells the verbs where to write two outputs, both inside `code_meta/`.
+
+1. **The replication report**, `code_meta/replication_report.csv`, written by `rpl_write_report()`. A CSV file kept over time: each run adds one row per script, so the file holds the history of all the runs. Main columns:
+   * `date`, `time`, `user_node` (user@machine) and `session_time` (total time of the scripts): when, by whom and how long;
+   * `filename` and `folder`: the script;
+   * `has_error`: whether the script failed, and `error`: the error message;
+   * `elapsed`: the time taken by the script, in seconds;
+   * `run_replicate`, plus the YAML fields given in `cols_extra` (by default `Author`).
+
+   Read it back with `rpl_read_report()` (all runs) or `rpl_read_report(last_run = TRUE)`; at the next run, `rpl_add_last_run()` reads it too. Another name can be given with `rpl_set_dirs(report_dir = "code_meta", report_file = "my_report.csv")`. Without a name, an existing `999_CHECK_RUN_report.csv` (older projects) is used when there is no `replication_report.csv`.
+2. **The archive of the script outputs**, `code_meta/sessions/session_YYYY_MM_DD/<script>.Rout`, written by `rpl_run_scripts()`. One `.Rout` file per script, with everything the script printed, its warnings and its error, in one folder per day of run (a second run on the same day overwrites it). The archive is on by default. To put it elsewhere: `rpl_set_dirs(report_dir = "code_meta", session_dir = "other/folder")`. To switch it off: `rpl_set_dirs(report_dir = "code_meta", session_dir = NULL)`.
 
 ## Example
 
-The package ships 10 small scripts, some of them failing on purpose.
+The package ships 10 small scripts, some of them failing on purpose. Here the two outputs go to a temporary folder.
 
 ```{r libs, message = FALSE}
-library(replicater)
-library(dplyr)
+library(replicater)  # the replication verbs, and %>%
+library(dplyr)       # select(), to show a few columns
 ```
 
-**1. Set the folders** of the report and of the `.Rout` files (here a temporary folder; in a project, e.g. `"code_meta"`):
+**1. Set the output folders:**
 
 ```{r dirs}
-rpl_set_dirs(report_dir = tempdir())
+dir_meta <- file.path(tempdir(), "code_meta")  # in a project: "code_meta"
+rpl_set_dirs(report_dir = dir_meta)            # report and archive will go to dir_meta
 ```
 
-**2. List the scripts** in the order they will run, with all the fields of their YAML header. The table can be filtered further with dplyr before running:
+**2. List the scripts** in the order they will run, with all the fields of their YAML header:
 
 ```{r list}
-path_scripts <- system.file("r_scripts_fake", package = "replicater")
-
-scripts <- rpl_list_scripts(path_scripts)
+path_scripts <- system.file("r_scripts_fake", package = "replicater")  # folder of the example scripts
+scripts <- rpl_list_scripts(path_scripts)                               # one row per script, in run order
 scripts %>%
-  select(filename, has_yaml_header, run_replicate, Author)
+  select(filename, has_yaml_header, run_replicate, Author)              # show a few columns
 ```
 
-**3. Run the scripts**, each in a new R session. The script with `run_replicate: FALSE` is skipped. The run is appended to the report, and a summary is printed:
+**3. Run the pipe:**
 
 ```{r run}
-out <- scripts %>%
-  rpl_replicate(echo = FALSE)
+runs <- scripts %>%
+  rpl_add_last_run() %>%             # no report yet: has_error_last stays NA
+  rpl_check_packages() %>%           # lists the missing packages (none here)
+  rpl_run_scripts(echo = FALSE) %>%  # runs the 9 scripts not marked run_replicate: FALSE
+  rpl_write_report() %>%             # writes dir_meta/replication_report.csv
+  rpl_print_summary()                # prints errors and slowest scripts
 ```
 
-**4. Next time**, `rpl_list_scripts()` adds the result of the last run:
+**4. The two outputs on disk:**
+
+```{r disk}
+## the replication report dir_meta/replication_report.csv: one row per script and run
+rpl_read_report() %>%
+  select(date, filename, has_error, error, elapsed)
+
+## the archive: one .Rout file per script, in the folder of the day
+list.files(file.path(dir_meta, "sessions"), recursive = TRUE)
+```
+
+**5. At the next run**, `rpl_add_last_run()` adds the result of the last run:
 
 ```{r rerun}
-rpl_list_scripts(path_scripts) %>%
+scripts %>%
+  rpl_add_last_run() %>%                                       # reads dir_meta/replication_report.csv
   select(filename, run_replicate, elapsed_last, has_error_last)
 ```
 
-`rpl_replicate()` chains functions that can also be used on their own: `rpl_check_deps()` and `rpl_install_missing()` (packages), `rpl_run_Rfiles()` (run), `rpl_showErr()` (errors), `rpl_write()` (report) and `rpl_add_info_last()` (previous run).
+The verbs build on lower level functions, which can also be used on their own: `rpl_list_Rfiles()`, `rpl_check_deps()`, `rpl_install_missing()`, `rpl_run_Rfiles()`, `rpl_showErr()`, `rpl_write()` and `rpl_add_info_last()`.
 
 ## In a project
 
-A master script, run from the project root, e.g. `code_meta/replicate_all.R`. Its own `run_replicate: FALSE` makes sure it never runs itself:
+A master script, saved for example as `code_meta/replicate_all.R` and run from the project root:
 
 ```{r master, eval = FALSE}
 #' ---
 #' Title: "Rerun all scripts of the project and report errors"
 #' run_replicate: FALSE
 #' ---
+## run_replicate: FALSE above: the master script never runs itself
 
-library(replicater)
-library(dplyr)
+library(replicater)  # the replication verbs, and %>%
 
+## Where to write (nothing is written by this line, the verbs below use it):
+## report:  code_meta/replication_report.csv
+## archive: code_meta/sessions/session_YYYY_MM_DD/<script>.Rout
 rpl_set_dirs(report_dir = "code_meta")
+## rpl_set_dirs(report_dir = "code_meta", session_dir = NULL)  # same, without the archive
 
-scripts <- rpl_list_scripts(c("code_setup", "code_analysis"), exclude = "888")
-
-out <- scripts %>%
-  rpl_replicate(install = "pak")
+rpl_list_scripts(c("code_setup", "code_analysis"),  # scripts of code_setup first, then of code_analysis
+                 exclude = "888") %>%               # skip the helper scripts 888_*, sourced by the others
+  rpl_add_last_run() %>%                            # add the result of the last run, from the report
+  rpl_check_packages(install = "pak") %>%           # install the missing packages with pak
+  rpl_run_scripts() %>%                             # run each script in a new R session, archive its .Rout file
+  rpl_write_report() %>%                            # append this run to code_meta/replication_report.csv
+  rpl_print_summary()                               # print errors, new errors, fixed and slowest scripts
 ```
-
