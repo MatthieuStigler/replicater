@@ -46,7 +46,7 @@ test_that("rpl_write appends to the report", {
                             run_function = "external")
   rpl_write(out_ext, dir_path = dir_temp, cols_extra = "Author")
   rpl_write(out_ext, dir_path = dir_temp, cols_extra = "Author")
-  report <- readr::read_csv(file.path(dir_temp, "replication_report.csv"), show_col_types = FALSE)
+  report <- readr::read_csv(file.path(dir_temp, "replicater_report.csv"), show_col_types = FALSE)
   expect_equal(nrow(report), 2 * nrow(out_ext))
   expect_equal(colnames(report), c(intrnl_cols_need, "Author"))
   expect_output(rpl_showErr(out_ext), "1_8_parse_error.R")
@@ -127,7 +127,7 @@ test_that("rpl_write overwrites with append = FALSE", {
   out <- rpl_run_Rfiles(rpl_list_Rfiles(dir))
   rpl_write(out, dir_path = dir)
   rpl_write(out, dir_path = dir, append = FALSE)
-  report <- readr::read_csv(file.path(dir, "replication_report.csv"), show_col_types = FALSE)
+  report <- readr::read_csv(file.path(dir, "replicater_report.csv"), show_col_types = FALSE)
   expect_equal(nrow(report), 1)
 
   ## append = TRUE on a missing file still writes the header
@@ -145,18 +145,18 @@ test_that("rpl_write continues an old 999 report and aligns its columns", {
 
   ## old report: has_yaml, empty runMat columns, no run_replicate
   rpl_write(out, dir_path = dir)
-  report_old <- readr::read_csv(file.path(dir, "replication_report.csv"), col_types = readr::cols(.default = "c")) |>
+  report_old <- readr::read_csv(file.path(dir, "replicater_report.csv"), col_types = readr::cols(.default = "c")) |>
     dplyr::rename(has_yaml = "has_yaml_header") |>
     dplyr::mutate(has_runMat = NA, runMat_val = NA) |>
     dplyr::select(-"run_replicate")
   readr::write_csv(report_old, file.path(dir, "999_CHECK_RUN_report.csv"))
-  file.remove(file.path(dir, "replication_report.csv"))
+  file.remove(file.path(dir, "replicater_report.csv"))
 
   Sys.sleep(0.01)
   write_script(dir, "1_1_a.R")
   expect_message(rpl_write(rpl_run_Rfiles(rpl_list_Rfiles(dir)), dir_path = dir),
                  "rewriting it")
-  expect_false(file.exists(file.path(dir, "replication_report.csv")))
+  expect_false(file.exists(file.path(dir, "replicater_report.csv")))
   report <- readr::read_csv(file.path(dir, "999_CHECK_RUN_report.csv"), show_col_types = FALSE)
   expect_equal(colnames(report), intrnl_cols_need)
   expect_equal(report$has_error, c(TRUE, FALSE))

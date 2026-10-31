@@ -4,12 +4,16 @@
 ### Internal utilities
 ################################
 
-intrnl_report_default <- "replication_report.csv"
+intrnl_report_default <- "replicater_report.csv"
 intrnl_report_old <- "999_CHECK_RUN_report.csv"
 
 ## path of the report: report_file if given, else the default name, else the old
 ## 999 name when only that file exists (keeps the history of older projects)
 intrnl_dir_to_file <- function(dir, report_file = NULL) {
+  if(is.null(dir)) {
+    stop("No report folder: set it first with rpl_set_dirs(), e.g. rpl_set_dirs(report_dir = \"code_meta\")",
+         call. = FALSE)
+  }
   files <- paste(dir, c(report_file, intrnl_report_default, intrnl_report_old), sep = "/") %>%
     str_replace("//", "/")
   if(!is.null(report_file)) return(files[1])
@@ -127,7 +131,7 @@ rpl_parse_yaml <- function(file_path){
 #' @param check_numbers Whether to check if numbers are ambiguous?
 #' @export
 #' @rdname rpl_run_Rfiles
-rpl_list_Rfiles <- function(dir_path="code_setup", no_old = TRUE, recursive=FALSE,
+rpl_list_Rfiles <- function(dir_path, no_old = TRUE, recursive=FALSE,
                             keep_field=NULL,
                             check_numbers= TRUE) {
 
@@ -216,7 +220,7 @@ rpl_list_Rfiles <- function(dir_path="code_setup", no_old = TRUE, recursive=FALS
 #'
 #' List R scripts with their YAML header (`rpl_list_Rfiles()`), run them
 #' (`rpl_run_Rfiles()`), show errors (`rpl_showErr()`) and write a report
-#' `replication_report.csv` (`rpl_write()`).
+#' `replicater_report.csv` (`rpl_write()`).
 #'
 #' A script can be excluded from the run with the field `run_replicate: FALSE`
 #' in its YAML header.
@@ -247,11 +251,11 @@ rpl_list_Rfiles <- function(dir_path="code_setup", no_old = TRUE, recursive=FALS
 #' rpl_write(out, dir = path_temp)
 #'
 #' ## check output
-#' read_csv(paste(path_temp, "replication_report.csv", sep="/"), col_types = cols())
+#' read_csv(paste(path_temp, "replicater_report.csv", sep="/"), col_types = cols())
 #'
 #' ## re-write
 #' rpl_write(out, dir = path_temp)
-#' read_csv(paste(path_temp, "replication_report.csv", sep="/"), col_types = cols())
+#' read_csv(paste(path_temp, "replicater_report.csv", sep="/"), col_types = cols())
 #' @export
 rpl_run_Rfiles <- function(scripts_file, echo=FALSE, skip_false=TRUE,
                            run_function=c("internal", "external"), tmp_dir=NULL, run_cmd_vanilla = FALSE) {
@@ -346,7 +350,7 @@ rpl_showErr <- function(scripts_file_runned) {
 #'   `cols_extra`), it is rewritten with the columns of both.
 #' @param cols_extra Extra columns to keep
 #' @param report_file Name of the report file in `dir_path`. The default is the
-#'   name set with `rpl_set_dirs()`; when none is set, `replication_report.csv`,
+#'   name set with `rpl_set_dirs()`; when none is set, `replicater_report.csv`,
 #'   or `999_CHECK_RUN_report.csv` when only that older file exists.
 #' @export
 #' @rdname rpl_run_Rfiles

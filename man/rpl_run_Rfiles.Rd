@@ -9,7 +9,7 @@
 \title{Run all scripts of a project and report errors}
 \usage{
 rpl_list_Rfiles(
-  dir_path = "code_setup",
+  dir_path,
   no_old = TRUE,
   recursive = FALSE,
   keep_field = NULL,
@@ -77,7 +77,7 @@ When the existing report has other columns (older replicater version, other
 \item{cols_extra}{Extra columns to keep}
 
 \item{report_file}{Name of the report file in \code{dir_path}. The default is the
-name set with \code{rpl_set_dirs()}; when none is set, \code{replication_report.csv},
+name set with \code{rpl_set_dirs()}; when none is set, \code{replicater_report.csv},
 or \verb{999_CHECK_RUN_report.csv} when only that older file exists.}
 
 \item{warn}{Should it warn if file is actually missing?}
@@ -85,7 +85,7 @@ or \verb{999_CHECK_RUN_report.csv} when only that older file exists.}
 \description{
 List R scripts with their YAML header (\code{rpl_list_Rfiles()}), run them
 (\code{rpl_run_Rfiles()}), show errors (\code{rpl_showErr()}) and write a report
-\code{replication_report.csv} (\code{rpl_write()}).
+\code{replicater_report.csv} (\code{rpl_write()}).
 }
 \details{
 A script can be excluded from the run with the field \code{run_replicate: FALSE}
@@ -115,9 +115,9 @@ rpl_showErr(out)
 rpl_write(out, dir = path_temp)
 
 ## check output
-read_csv(paste(path_temp, "replication_report.csv", sep="/"), col_types = cols())
+read_csv(paste(path_temp, "replicater_report.csv", sep="/"), col_types = cols())
 
 ## re-write
 rpl_write(out, dir = path_temp)
-read_csv(paste(path_temp, "replication_report.csv", sep="/"), col_types = cols())
+read_csv(paste(path_temp, "replicater_report.csv", sep="/"), col_types = cols())
 }
