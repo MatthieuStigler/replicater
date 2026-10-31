@@ -26,6 +26,9 @@ intrnl_cols_need <- c("session", "session_time",
                      "has_error_parse", "has_yaml_header", "run_replicate",
                      "date", "time")
 
+## read a report, guessing column types on all rows (error or Author can be NA for long)
+intrnl_read_report <- function(file) readr::read_csv(file, col_types = readr::cols(), guess_max = Inf)
+
 ## folder without leading "./", to match "./code_setup" with "code_setup"
 intrnl_folder_key <- function(folder) str_replace(as.character(folder), "^\\./", "")
 
@@ -342,13 +345,13 @@ rpl_showErr <- function(scripts_file_runned) {
 #'   When the existing report has other columns (older replicater version, other
 #'   `cols_extra`), it is rewritten with the columns of both.
 #' @param cols_extra Extra columns to keep
-#' @param report_file Name of the report file in `dir_path`. The default `NULL`
-#'   uses `replication_report.csv`, or `999_CHECK_RUN_report.csv` when only that
-#'   older file exists.
+#' @param report_file Name of the report file in `dir_path`. The default is the
+#'   name set with `rpl_set_dirs()`; when none is set, `replication_report.csv`,
+#'   or `999_CHECK_RUN_report.csv` when only that older file exists.
 #' @export
 #' @rdname rpl_run_Rfiles
 rpl_write <- function(scripts_file_runned, dir_path=rpl_get_dirs()$report_dir,
-                      append=NULL, cols_extra = NULL, report_file = NULL) {
+                      append=NULL, cols_extra = NULL, report_file = rpl_get_dirs()$report_file) {
   file_out <- intrnl_dir_to_file(dir_path, report_file)
   if(is.null(append)) append <- TRUE
   append <- append && file.exists(file_out)
@@ -388,11 +391,11 @@ rpl_write <- function(scripts_file_runned, dir_path=rpl_get_dirs()$report_dir,
 #' @export
 #' @rdname rpl_run_Rfiles
 rpl_add_info_last <- function(scripts_file_runned, dir_path=rpl_get_dirs()$report_dir, warn=TRUE,
-                              report_file = NULL) {
+                              report_file = rpl_get_dirs()$report_file) {
   file_out <- intrnl_dir_to_file(dir_path, report_file)
 
   if(file.exists(file_out)) {
-    df_out <- readr::read_csv(file_out, col_types = readr::cols()) %>%
+    df_out <- intrnl_read_report(file_out) %>%
       filter(.data$time==max(.data$time)) %>%
       dplyr::transmute(filename = .data$filename,
                        folder_key = intrnl_folder_key(.data$folder),

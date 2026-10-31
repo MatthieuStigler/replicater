@@ -32,14 +32,14 @@ rpl_write(
   dir_path = rpl_get_dirs()$report_dir,
   append = NULL,
   cols_extra = NULL,
-  report_file = NULL
+  report_file = rpl_get_dirs()$report_file
 )
 
 rpl_add_info_last(
   scripts_file_runned,
   dir_path = rpl_get_dirs()$report_dir,
   warn = TRUE,
-  report_file = NULL
+  report_file = rpl_get_dirs()$report_file
 )
 }
 \arguments{
@@ -76,9 +76,9 @@ When the existing report has other columns (older replicater version, other
 
 \item{cols_extra}{Extra columns to keep}
 
-\item{report_file}{Name of the report file in \code{dir_path}. The default \code{NULL}
-uses \code{replication_report.csv}, or \verb{999_CHECK_RUN_report.csv} when only that
-older file exists.}
+\item{report_file}{Name of the report file in \code{dir_path}. The default is the
+name set with \code{rpl_set_dirs()}; when none is set, \code{replication_report.csv},
+or \verb{999_CHECK_RUN_report.csv} when only that older file exists.}
 
 \item{warn}{Should it warn if file is actually missing?}
 }
