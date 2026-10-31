@@ -1,6 +1,9 @@
-# replicater (development version)
+# replicater 0.2
 
-* New verbs for the master script: `rpl_set_dirs()` sets the folders of the report and of the `.Rout` files once, then `rpl_list_scripts()` lists the scripts in run order (order of `dir_path`, then folder and file name) with the last run, and `rpl_replicate()` checks or installs the packages, runs the scripts, writes the report and prints a summary (new errors, fixed scripts, slowest scripts).
+on 2026-10-28
+
+* Replication pipe for the master script, one verb per step: `rpl_list_scripts()` (scripts in run order: order of `dir_path`, then folder and file name), `rpl_add_last_run()`, `rpl_check_packages()`, `rpl_run_scripts()`, `rpl_write_report()` and `rpl_print_summary()` (errors, new errors, fixed scripts, slowest scripts). `%>%` is re-exported.
+* `rpl_set_dirs()` sets once the folder and name of the replication report and the folder of the archive of the `.Rout` files (`session_dir = NULL` switches the archive off, `report_file` changes the report name). `rpl_read_report()` reads the report back.
 * `rpl_write()` and `rpl_add_info_last()`: `dir_path` defaults to the folder set by `rpl_set_dirs()` (still `"code_setup"` when not set).
 * `rpl_add_info_last()` matches `./code_setup` with `code_setup`, and keeps `folder` as it is.
 * `rpl_check_deps()`: `...` passed to `renv::dependencies()`, e.g. `quiet = TRUE, errors = "ignored"`.
