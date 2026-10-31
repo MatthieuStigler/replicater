@@ -44,16 +44,16 @@ Outside the pipe, `rpl_read_report()` reads the replication report back.
 
 ## What is written on disk
 
-`rpl_set_dirs(report_dir = "code_meta")` writes nothing itself: it tells the verbs where to write two outputs, both inside `code_meta/`.
+`rpl_set_dirs(report_dir = "code_meta")` writes nothing itself: it tells the verbs where to write two outputs, both inside `code_meta/`. There is no default folder: without `rpl_set_dirs()`, the verbs stop before running anything.
 
-1.  **The replication report**, `code_meta/replication_report.csv`, written by `rpl_write_report()`. A CSV file kept over time: each run adds one row per script, so the file holds the history of all the runs. Main columns:
+1.  **The replication report**, `code_meta/replicater_report.csv`, written by `rpl_write_report()`. A CSV file kept over time: each run adds one row per script, so the file holds the history of all the runs. Main columns:
     - `date`, `time`, `user_node` (<user@machine>) and `session_time` (total time of the scripts): when, by whom and how long;
     - `filename` and `folder`: the script;
     - `has_error`: whether the script failed, and `error`: the error message;
     - `elapsed`: the time taken by the script, in seconds;
     - `run_replicate`, plus the YAML fields given in `cols_extra` (by default `Author`).
 
-    Read it back with `rpl_read_report()` (all runs) or `rpl_read_report(last_run = TRUE)`; at the next run, `rpl_add_last_run()` reads it too. Another name can be given with `rpl_set_dirs(report_dir = "code_meta", report_file = "my_report.csv")`. Without a name, an existing `999_CHECK_RUN_report.csv` (older projects) is used when there is no `replication_report.csv`.
+    Read it back with `rpl_read_report()` (all runs) or `rpl_read_report(last_run = TRUE)`; at the next run, `rpl_add_last_run()` reads it too. Another name can be given with `rpl_set_dirs(report_dir = "code_meta", report_file = "my_report.csv")`. Without a name, an existing `999_CHECK_RUN_report.csv` (older projects) is used when there is no `replicater_report.csv`.
 2.  **The archive of the script outputs**, `code_meta/sessions/session_YYYY_MM_DD/<script>.Rout`, written by `rpl_run_scripts()`. One `.Rout` file per script, with everything the script printed, its warnings and its error, in one folder per day of run (a second run on the same day overwrites it). The archive is on by default. To put it elsewhere: `rpl_set_dirs(report_dir = "code_meta", session_dir = "other/folder")`. To switch it off: `rpl_set_dirs(report_dir = "code_meta", session_dir = NULL)`.
 
 ## Example
@@ -101,12 +101,12 @@ runs <- scripts %>%
   rpl_add_last_run() %>%             # no report yet: has_error_last stays NA
   rpl_check_packages() %>%           # lists the missing packages (none here)
   rpl_run_scripts(echo = FALSE) %>%  # runs the 9 scripts not marked run_replicate: FALSE
-  rpl_write_report() %>%             # writes dir_meta/replication_report.csv
+  rpl_write_report() %>%             # writes dir_meta/replicater_report.csv
   rpl_print_summary()                # prints errors and slowest scripts
-#> No replication report yet at /tmp/RtmptvInEz/code_meta/replication_report.csv: no last run to add
+#> No replication report yet at /tmp/RtmpCmrIJb/code_meta/replicater_report.csv: no last run to add
 #> All packages are installed.
-#> .Rout files archived in /tmp/RtmptvInEz/code_meta/sessions/session_2026_10_28
-#> Replication report: 9 rows added to /tmp/RtmptvInEz/code_meta/replication_report.csv
+#> .Rout files archived in /tmp/RtmpCmrIJb/code_meta/sessions/session_2026_10_31
+#> Replication report: 9 rows added to /tmp/RtmpCmrIJb/code_meta/replicater_report.csv
 #> 
 #> ## replicater: 9 scripts run, 3 with errors. Time of the scripts without error: <1 Min 
 #> 
@@ -128,61 +128,61 @@ runs <- scripts %>%
 #> 1 1_7_messages_annoying.R     1.4 <1 Min
 #> 2 1_4_sleep_3_rLoS.R          0.6 <1 Sec
 #> 3 1_2_heavy_one_rLoH.R        0.3 <1 Sec
-#> 4 1_6_load_package.R          0.3 <1 Sec
+#> 4 1_6_load_package.R          0.2 <1 Sec
 #> 5 1_9_no_yaml.R               0.1 <1 Sec
 ```
 
 **4. The two outputs on disk:**
 
 ``` r
-## the replication report dir_meta/replication_report.csv: one row per script and run
+## the replication report dir_meta/replicater_report.csv: one row per script and run
 rpl_read_report() %>%
   select(date, filename, has_error, error, elapsed)
 #> # A tibble: 9 × 5
 #>   date       filename                     has_error error                elapsed
 #>   <date>     <chr>                        <lgl>     <chr>                  <dbl>
-#> 1 2026-10-28 1_1_light_one_rLo.R          FALSE      <NA>                  0.12 
-#> 2 2026-10-28 1_2_heavy_one_rLoH.R         FALSE      <NA>                  0.282
-#> 3 2026-10-28 1_3_2_lightest_error_rLoEr.R TRUE      "Error in log(\"a\"…  NA    
-#> 4 2026-10-28 1_3_light_error_rLoE.R       TRUE      "Error in `dplyr::s…  NA    
-#> 5 2026-10-28 1_4_sleep_3_rLoS.R           FALSE      <NA>                  0.618
-#> 6 2026-10-28 1_6_load_package.R           FALSE      <NA>                  0.262
-#> 7 2026-10-28 1_7_messages_annoying.R      FALSE      <NA>                  1.35 
-#> 8 2026-10-28 1_8_parse_error.R            TRUE      "Error: unexpected …  NA    
-#> 9 2026-10-28 1_9_no_yaml.R                FALSE      <NA>                  0.131
+#> 1 2026-10-31 1_1_light_one_rLo.R          FALSE      <NA>                  0.107
+#> 2 2026-10-31 1_2_heavy_one_rLoH.R         FALSE      <NA>                  0.261
+#> 3 2026-10-31 1_3_2_lightest_error_rLoEr.R TRUE      "Error in log(\"a\"…  NA    
+#> 4 2026-10-31 1_3_light_error_rLoE.R       TRUE      "Error in `dplyr::s…  NA    
+#> 5 2026-10-31 1_4_sleep_3_rLoS.R           FALSE      <NA>                  0.609
+#> 6 2026-10-31 1_6_load_package.R           FALSE      <NA>                  0.202
+#> 7 2026-10-31 1_7_messages_annoying.R      FALSE      <NA>                  1.38 
+#> 8 2026-10-31 1_8_parse_error.R            TRUE      "Error: unexpected …  NA    
+#> 9 2026-10-31 1_9_no_yaml.R                FALSE      <NA>                  0.114
 
 ## the archive: one .Rout file per script, in the folder of the day
 list.files(file.path(dir_meta, "sessions"), recursive = TRUE)
-#> [1] "session_2026_10_28/1_1_light_one_rLo.Rout"         
-#> [2] "session_2026_10_28/1_2_heavy_one_rLoH.Rout"        
-#> [3] "session_2026_10_28/1_3_2_lightest_error_rLoEr.Rout"
-#> [4] "session_2026_10_28/1_3_light_error_rLoE.Rout"      
-#> [5] "session_2026_10_28/1_4_sleep_3_rLoS.Rout"          
-#> [6] "session_2026_10_28/1_6_load_package.Rout"          
-#> [7] "session_2026_10_28/1_7_messages_annoying.Rout"     
-#> [8] "session_2026_10_28/1_8_parse_error.Rout"           
-#> [9] "session_2026_10_28/1_9_no_yaml.Rout"
+#> [1] "session_2026_10_31/1_1_light_one_rLo.Rout"         
+#> [2] "session_2026_10_31/1_2_heavy_one_rLoH.Rout"        
+#> [3] "session_2026_10_31/1_3_2_lightest_error_rLoEr.Rout"
+#> [4] "session_2026_10_31/1_3_light_error_rLoE.Rout"      
+#> [5] "session_2026_10_31/1_4_sleep_3_rLoS.Rout"          
+#> [6] "session_2026_10_31/1_6_load_package.Rout"          
+#> [7] "session_2026_10_31/1_7_messages_annoying.Rout"     
+#> [8] "session_2026_10_31/1_8_parse_error.Rout"           
+#> [9] "session_2026_10_31/1_9_no_yaml.Rout"
 ```
 
 **5. At the next run**, `rpl_add_last_run()` adds the result of the last run:
 
 ``` r
 scripts %>%
-  rpl_add_last_run() %>%                                       # reads dir_meta/replication_report.csv
+  rpl_add_last_run() %>%                                       # reads dir_meta/replicater_report.csv
   select(filename, run_replicate, elapsed_last, has_error_last)
 #> # A tibble: 10 × 4
 #>    filename                     run_replicate elapsed_last has_error_last
 #>    <chr>                        <lgl>                <dbl> <lgl>         
-#>  1 1_1_light_one_rLo.R          TRUE                 0.12  FALSE         
-#>  2 1_2_heavy_one_rLoH.R         TRUE                 0.282 FALSE         
+#>  1 1_1_light_one_rLo.R          TRUE                 0.107 FALSE         
+#>  2 1_2_heavy_one_rLoH.R         TRUE                 0.261 FALSE         
 #>  3 1_3_2_lightest_error_rLoEr.R TRUE                NA     TRUE          
 #>  4 1_3_light_error_rLoE.R       TRUE                NA     TRUE          
-#>  5 1_4_sleep_3_rLoS.R           TRUE                 0.618 FALSE         
+#>  5 1_4_sleep_3_rLoS.R           TRUE                 0.609 FALSE         
 #>  6 1_5_SUPER_heavy_norun.R      FALSE               NA     NA            
-#>  7 1_6_load_package.R           TRUE                 0.262 FALSE         
-#>  8 1_7_messages_annoying.R      NA                   1.35  FALSE         
+#>  7 1_6_load_package.R           TRUE                 0.202 FALSE         
+#>  8 1_7_messages_annoying.R      NA                   1.38  FALSE         
 #>  9 1_8_parse_error.R            TRUE                NA     TRUE          
-#> 10 1_9_no_yaml.R                NA                   0.131 FALSE
+#> 10 1_9_no_yaml.R                NA                   0.114 FALSE
 ```
 
 The verbs build on lower level functions, which can also be used on their own: `rpl_list_Rfiles()`, `rpl_check_deps()`, `rpl_install_missing()`, `rpl_run_Rfiles()`, `rpl_showErr()`, `rpl_write()` and `rpl_add_info_last()`.
@@ -201,7 +201,7 @@ A master script, saved for example as `code_meta/replicate_all.R` and run from t
 library(replicater)  # the replication verbs, and %>%
 
 ## Where to write (nothing is written by this line, the verbs below use it):
-## report:  code_meta/replication_report.csv
+## report:  code_meta/replicater_report.csv
 ## archive: code_meta/sessions/session_YYYY_MM_DD/<script>.Rout
 rpl_set_dirs(report_dir = "code_meta")
 ## rpl_set_dirs(report_dir = "code_meta", session_dir = NULL)  # same, without the archive
@@ -211,6 +211,6 @@ rpl_list_scripts(c("code_setup", "code_analysis"),  # scripts of code_setup firs
   rpl_add_last_run() %>%                            # add the result of the last run, from the report
   rpl_check_packages(install = "pak") %>%           # install the missing packages with pak
   rpl_run_scripts() %>%                             # run each script in a new R session, archive its .Rout file
-  rpl_write_report() %>%                            # append this run to code_meta/replication_report.csv
+  rpl_write_report() %>%                            # append this run to code_meta/replicater_report.csv
   rpl_print_summary()                               # print errors, new errors, fixed and slowest scripts
 ```

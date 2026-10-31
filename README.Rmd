@@ -59,16 +59,16 @@ Outside the pipe, `rpl_read_report()` reads the replication report back.
 
 ## What is written on disk
 
-`rpl_set_dirs(report_dir = "code_meta")` writes nothing itself: it tells the verbs where to write two outputs, both inside `code_meta/`.
+`rpl_set_dirs(report_dir = "code_meta")` writes nothing itself: it tells the verbs where to write two outputs, both inside `code_meta/`. There is no default folder: without `rpl_set_dirs()`, the verbs stop before running anything.
 
-1. **The replication report**, `code_meta/replication_report.csv`, written by `rpl_write_report()`. A CSV file kept over time: each run adds one row per script, so the file holds the history of all the runs. Main columns:
+1. **The replication report**, `code_meta/replicater_report.csv`, written by `rpl_write_report()`. A CSV file kept over time: each run adds one row per script, so the file holds the history of all the runs. Main columns:
    * `date`, `time`, `user_node` (user@machine) and `session_time` (total time of the scripts): when, by whom and how long;
    * `filename` and `folder`: the script;
    * `has_error`: whether the script failed, and `error`: the error message;
    * `elapsed`: the time taken by the script, in seconds;
    * `run_replicate`, plus the YAML fields given in `cols_extra` (by default `Author`).
 
-   Read it back with `rpl_read_report()` (all runs) or `rpl_read_report(last_run = TRUE)`; at the next run, `rpl_add_last_run()` reads it too. Another name can be given with `rpl_set_dirs(report_dir = "code_meta", report_file = "my_report.csv")`. Without a name, an existing `999_CHECK_RUN_report.csv` (older projects) is used when there is no `replication_report.csv`.
+   Read it back with `rpl_read_report()` (all runs) or `rpl_read_report(last_run = TRUE)`; at the next run, `rpl_add_last_run()` reads it too. Another name can be given with `rpl_set_dirs(report_dir = "code_meta", report_file = "my_report.csv")`. Without a name, an existing `999_CHECK_RUN_report.csv` (older projects) is used when there is no `replicater_report.csv`.
 2. **The archive of the script outputs**, `code_meta/sessions/session_YYYY_MM_DD/<script>.Rout`, written by `rpl_run_scripts()`. One `.Rout` file per script, with everything the script printed, its warnings and its error, in one folder per day of run (a second run on the same day overwrites it). The archive is on by default. To put it elsewhere: `rpl_set_dirs(report_dir = "code_meta", session_dir = "other/folder")`. To switch it off: `rpl_set_dirs(report_dir = "code_meta", session_dir = NULL)`.
 
 ## Example
@@ -103,14 +103,14 @@ runs <- scripts %>%
   rpl_add_last_run() %>%             # no report yet: has_error_last stays NA
   rpl_check_packages() %>%           # lists the missing packages (none here)
   rpl_run_scripts(echo = FALSE) %>%  # runs the 9 scripts not marked run_replicate: FALSE
-  rpl_write_report() %>%             # writes dir_meta/replication_report.csv
+  rpl_write_report() %>%             # writes dir_meta/replicater_report.csv
   rpl_print_summary()                # prints errors and slowest scripts
 ```
 
 **4. The two outputs on disk:**
 
 ```{r disk}
-## the replication report dir_meta/replication_report.csv: one row per script and run
+## the replication report dir_meta/replicater_report.csv: one row per script and run
 rpl_read_report() %>%
   select(date, filename, has_error, error, elapsed)
 
@@ -122,7 +122,7 @@ list.files(file.path(dir_meta, "sessions"), recursive = TRUE)
 
 ```{r rerun}
 scripts %>%
-  rpl_add_last_run() %>%                                       # reads dir_meta/replication_report.csv
+  rpl_add_last_run() %>%                                       # reads dir_meta/replicater_report.csv
   select(filename, run_replicate, elapsed_last, has_error_last)
 ```
 
@@ -142,7 +142,7 @@ A master script, saved for example as `code_meta/replicate_all.R` and run from t
 library(replicater)  # the replication verbs, and %>%
 
 ## Where to write (nothing is written by this line, the verbs below use it):
-## report:  code_meta/replication_report.csv
+## report:  code_meta/replicater_report.csv
 ## archive: code_meta/sessions/session_YYYY_MM_DD/<script>.Rout
 rpl_set_dirs(report_dir = "code_meta")
 ## rpl_set_dirs(report_dir = "code_meta", session_dir = NULL)  # same, without the archive
@@ -152,6 +152,6 @@ rpl_list_scripts(c("code_setup", "code_analysis"),  # scripts of code_setup firs
   rpl_add_last_run() %>%                            # add the result of the last run, from the report
   rpl_check_packages(install = "pak") %>%           # install the missing packages with pak
   rpl_run_scripts() %>%                             # run each script in a new R session, archive its .Rout file
-  rpl_write_report() %>%                            # append this run to code_meta/replication_report.csv
+  rpl_write_report() %>%                            # append this run to code_meta/replicater_report.csv
   rpl_print_summary()                               # print errors, new errors, fixed and slowest scripts
 ```
