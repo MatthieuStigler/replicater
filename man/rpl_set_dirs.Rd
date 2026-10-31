@@ -22,13 +22,14 @@ Default: \verb{<report_dir>/sessions}. \code{NULL} switches the archive off (the
 \code{.Rout} files then go to a temporary folder).}
 
 \item{report_file}{Name of the replication report. Default \code{NULL}:
-\code{replication_report.csv}, or \verb{999_CHECK_RUN_report.csv} when only that
+\code{replicater_report.csv}, or \verb{999_CHECK_RUN_report.csv} when only that
 older file exists in \code{report_dir}.}
 }
 \value{
 \code{rpl_set_dirs()}: the previous options, invisibly, to restore them
 with \code{options()}. \code{rpl_get_dirs()}: a list with \code{report_dir},
-\code{session_dir} and \code{report_file} (default \code{report_dir}: \code{"code_setup"}).
+\code{session_dir} and \code{report_file}, all \code{NULL} when \code{rpl_set_dirs()} was not
+called.
 }
 \description{
 Called once at the top of the master script. The verbs of the replication
@@ -36,7 +37,7 @@ pipe (see \code{\link[=rpl_list_scripts]{rpl_list_scripts()}}) and \code{\link[=
 there:
 \itemize{
 \item the \strong{replication report} \verb{<report_dir>/<report_file>}, by default
-\verb{<report_dir>/replication_report.csv}, one row per script and run,
+\verb{<report_dir>/replicater_report.csv}, one row per script and run,
 appended run after run;
 \item the \strong{archive of the script outputs}
 \verb{<session_dir>/session_YYYY_MM_DD/<script>.Rout}.
@@ -45,7 +46,8 @@ appended run after run;
 \details{
 The values are stored in the options \code{replicater.report_dir},
 \code{replicater.session_dir} and \code{replicater.report_file}. Nothing is written
-on disk by \code{rpl_set_dirs()} itself.
+on disk by \code{rpl_set_dirs()} itself. There is no default folder: the verbs
+that read or write the report stop when \code{rpl_set_dirs()} was not called.
 }
 \examples{
 old <- rpl_set_dirs(report_dir = "code_meta")

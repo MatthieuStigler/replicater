@@ -8,25 +8,27 @@
 #' pipe (see [rpl_list_scripts()]) and [rpl_read_report()] then read and write
 #' there:
 #' * the **replication report** `<report_dir>/<report_file>`, by default
-#'   `<report_dir>/replication_report.csv`, one row per script and run,
+#'   `<report_dir>/replicater_report.csv`, one row per script and run,
 #'   appended run after run;
 #' * the **archive of the script outputs**
 #'   `<session_dir>/session_YYYY_MM_DD/<script>.Rout`.
 #'
 #' The values are stored in the options `replicater.report_dir`,
 #' `replicater.session_dir` and `replicater.report_file`. Nothing is written
-#' on disk by `rpl_set_dirs()` itself.
+#' on disk by `rpl_set_dirs()` itself. There is no default folder: the verbs
+#' that read or write the report stop when `rpl_set_dirs()` was not called.
 #' @param report_dir Folder of the replication report.
 #' @param session_dir Folder of the archive of the script outputs: one subfolder
 #'   per run (`session_YYYY_MM_DD`) holding the `.Rout` file of each script.
 #'   Default: `<report_dir>/sessions`. `NULL` switches the archive off (the
 #'   `.Rout` files then go to a temporary folder).
 #' @param report_file Name of the replication report. Default `NULL`:
-#'   `replication_report.csv`, or `999_CHECK_RUN_report.csv` when only that
+#'   `replicater_report.csv`, or `999_CHECK_RUN_report.csv` when only that
 #'   older file exists in `report_dir`.
 #' @return `rpl_set_dirs()`: the previous options, invisibly, to restore them
 #'   with `options()`. `rpl_get_dirs()`: a list with `report_dir`,
-#'   `session_dir` and `report_file` (default `report_dir`: `"code_setup"`).
+#'   `session_dir` and `report_file`, all `NULL` when `rpl_set_dirs()` was not
+#'   called.
 #' @examples
 #' old <- rpl_set_dirs(report_dir = "code_meta")
 #' rpl_get_dirs()
@@ -51,8 +53,8 @@ rpl_set_dirs <- function(report_dir, session_dir = file.path(report_dir, "sessio
 #' @rdname rpl_set_dirs
 #' @export
 rpl_get_dirs <- function() {
-  report_dir <- getOption("replicater.report_dir", "code_setup")
-  session_dir <- getOption("replicater.session_dir", file.path(report_dir, "sessions"))
+  report_dir <- getOption("replicater.report_dir")
+  session_dir <- getOption("replicater.session_dir", FALSE)
   list(report_dir = report_dir,
        session_dir = if(isFALSE(session_dir)) NULL else session_dir,
        report_file = getOption("replicater.report_file"))
@@ -105,7 +107,7 @@ rpl_read_report <- function(last_run = FALSE) {
 #' 4. `rpl_run_scripts()` runs each script and keeps its `.Rout` file in the
 #'    archive `<session_dir>/session_YYYY_MM_DD/`.
 #' 5. `rpl_write_report()` appends the run to the replication report
-#'    `<report_dir>/replication_report.csv`.
+#'    `<report_dir>/replicater_report.csv`.
 #' 6. `rpl_print_summary()` prints the errors, the scripts that broke or got
 #'    fixed since the last run, and the slowest scripts.
 #'
@@ -197,6 +199,7 @@ rpl_run_scripts <- function(scripts, run_function = c("external", "internal"),
   force(scripts) ## run the previous verbs of the pipe first (lazy %>%)
   run_function <- match.arg(run_function)
   if(nrow(scripts) == 0) stop("No R scripts to run")
+  intrnl_report_path() ## stops before the run when rpl_set_dirs() was not called
 
   ## archive folder of the run, for the .Rout files
   session_dir <- rpl_get_dirs()$session_dir
@@ -217,13 +220,14 @@ rpl_run_scripts <- function(scripts, run_function = c("external", "internal"),
 rpl_write_report <- function(runs, cols_extra = "Author") {
   force(runs) ## run the previous verbs of the pipe first (lazy %>%)
   dirs <- rpl_get_dirs()
+  file_report <- intrnl_report_path() ## stops when rpl_set_dirs() was not called
   if(!dir.exists(dirs$report_dir)) {
     dir.create(dirs$report_dir, recursive = TRUE)
     message("Created folder ", dirs$report_dir)
   }
   rpl_write(runs, dir_path = dirs$report_dir, cols_extra = intersect(cols_extra, colnames(runs)),
             report_file = dirs$report_file)
-  message("Replication report: ", nrow(runs), " rows added to ", intrnl_report_path())
+  message("Replication report: ", nrow(runs), " rows added to ", file_report)
   invisible(runs)
 }
 

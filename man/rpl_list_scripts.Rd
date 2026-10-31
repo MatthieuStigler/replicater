@@ -79,7 +79,7 @@ not installed, and optionally installs them.
 \item \code{rpl_run_scripts()} runs each script and keeps its \code{.Rout} file in the
 archive \verb{<session_dir>/session_YYYY_MM_DD/}.
 \item \code{rpl_write_report()} appends the run to the replication report
-\verb{<report_dir>/replication_report.csv}.
+\verb{<report_dir>/replicater_report.csv}.
 \item \code{rpl_print_summary()} prints the errors, the scripts that broke or got
 fixed since the last run, and the slowest scripts.
 }

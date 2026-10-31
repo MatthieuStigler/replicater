@@ -21,7 +21,17 @@ test_that("rpl_set_dirs sets the global folders, and switches the archive off wi
   expect_null(rpl_get_dirs()$session_dir)
   expect_equal(rpl_get_dirs()$report_dir, "a")
   options(old)
-  expect_equal(rpl_get_dirs()$report_dir, "code_setup")
+  expect_null(rpl_get_dirs()$report_dir)
+})
+
+test_that("the verbs stop when rpl_set_dirs() was not called", {
+  dir <- new_dir()
+  write_script(dir, "1_1_ok.R")
+  scripts <- rpl_list_scripts(dir)
+  expect_error(rpl_add_last_run(scripts), "rpl_set_dirs")
+  expect_error(rpl_run_scripts(scripts, echo = FALSE), "rpl_set_dirs")
+  expect_error(rpl_read_report(), "rpl_set_dirs")
+  unlink(dir, recursive = TRUE)
 })
 
 test_that("rpl_list_scripts orders by dir_path, then folder and file name, and excludes", {
@@ -77,7 +87,7 @@ test_that("the pipe runs, writes the report and the archive, and compares with t
   expect_match(res2$txt, "New errors \\(no error last run\\): 1_4_broken.R", all = FALSE)
   expect_match(res2$txt, "Fixed since last run: 1_2_fixed.R", all = FALSE)
 
-  report <- readr::read_csv(file.path(dir, "code_meta", "replication_report.csv"), show_col_types = FALSE)
+  report <- readr::read_csv(file.path(dir, "code_meta", "replicater_report.csv"), show_col_types = FALSE)
   expect_equal(nrow(report), 6)
   options(old)
   unlink(dir, recursive = TRUE)
@@ -119,7 +129,7 @@ test_that("rpl_write_report creates the report folder and keeps Author only when
   old <- rpl_set_dirs(report_dir = file.path(dir, "new_meta"))
   runs <- rpl_run_scripts(rpl_list_scripts(dir), run_function = "internal", echo = FALSE)
   expect_message(rpl_write_report(runs), "Created folder")
-  report <- readr::read_csv(file.path(dir, "new_meta", "replication_report.csv"), show_col_types = FALSE)
+  report <- readr::read_csv(file.path(dir, "new_meta", "replicater_report.csv"), show_col_types = FALSE)
   expect_equal(report$Author, c("Me", NA))
 
   ## without any Author field
