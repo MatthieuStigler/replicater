@@ -3,31 +3,59 @@
 \name{rpl_set_dirs}
 \alias{rpl_set_dirs}
 \alias{rpl_get_dirs}
-\title{Set the folders of the report and of the run sessions}
+\title{Set the folders and name of the replication report and of the output archive}
 \usage{
-rpl_set_dirs(report_dir, session_dir = file.path(report_dir, "sessions"))
+rpl_set_dirs(
+  report_dir,
+  session_dir = file.path(report_dir, "sessions"),
+  report_file = NULL
+)
 
 rpl_get_dirs()
 }
 \arguments{
-\item{report_dir}{Folder of the report \code{replication_report.csv}.}
+\item{report_dir}{Folder of the replication report.}
 
-\item{session_dir}{Folder with one subfolder per run (\code{session_YYYY_MM_DD})
-holding the \code{.Rout} file of each script. Default: \verb{<report_dir>/sessions}.}
+\item{session_dir}{Folder of the archive of the script outputs: one subfolder
+per run (\code{session_YYYY_MM_DD}) holding the \code{.Rout} file of each script.
+Default: \verb{<report_dir>/sessions}. \code{NULL} switches the archive off (the
+\code{.Rout} files then go to a temporary folder).}
+
+\item{report_file}{Name of the replication report. Default \code{NULL}:
+\code{replication_report.csv}, or \verb{999_CHECK_RUN_report.csv} when only that
+older file exists in \code{report_dir}.}
 }
 \value{
 \code{rpl_set_dirs()}: the previous options, invisibly, to restore them
-with \code{options()}. \code{rpl_get_dirs()}: a list with \code{report_dir} and
-\code{session_dir} (default \code{report_dir}: \code{"code_setup"}).
+with \code{options()}. \code{rpl_get_dirs()}: a list with \code{report_dir},
+\code{session_dir} and \code{report_file} (default \code{report_dir}: \code{"code_setup"}).
 }
 \description{
-Called once at the top of the master script. \code{rpl_list_scripts()},
-\code{rpl_replicate()}, \code{rpl_write()} and \code{rpl_add_info_last()} then read and
-write there. The values are stored in the options \code{replicater.report_dir}
-and \code{replicater.session_dir}.
+Called once at the top of the master script. The verbs of the replication
+pipe (see \code{\link[=rpl_list_scripts]{rpl_list_scripts()}}) and \code{\link[=rpl_read_report]{rpl_read_report()}} then read and write
+there:
+\itemize{
+\item the \strong{replication report} \verb{<report_dir>/<report_file>}, by default
+\verb{<report_dir>/replication_report.csv}, one row per script and run,
+appended run after run;
+\item the \strong{archive of the script outputs}
+\verb{<session_dir>/session_YYYY_MM_DD/<script>.Rout}.
+}
+}
+\details{
+The values are stored in the options \code{replicater.report_dir},
+\code{replicater.session_dir} and \code{replicater.report_file}. Nothing is written
+on disk by \code{rpl_set_dirs()} itself.
 }
 \examples{
 old <- rpl_set_dirs(report_dir = "code_meta")
+rpl_get_dirs()
+
+## no archive of the .Rout files
+rpl_set_dirs(report_dir = "code_meta", session_dir = NULL)
+
+## another name for the report
+rpl_set_dirs(report_dir = "code_meta", report_file = "my_report.csv")
 rpl_get_dirs()
 options(old)
 }

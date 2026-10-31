@@ -2,21 +2,34 @@
 % Please edit documentation in R/replicate.R
 \name{rpl_list_scripts}
 \alias{rpl_list_scripts}
-\alias{rpl_replicate}
-\title{Replicate a project: list the scripts, then run them}
+\alias{rpl_add_last_run}
+\alias{rpl_check_packages}
+\alias{rpl_run_scripts}
+\alias{rpl_write_report}
+\alias{rpl_print_summary}
+\title{Replication pipe: list, check, run and report the scripts of a project}
 \usage{
 rpl_list_scripts(dir_path, exclude = NULL, recursive = TRUE, ...)
 
-rpl_replicate(
+rpl_add_last_run(scripts)
+
+rpl_check_packages(
   scripts,
   install = c("none", "install.packages", "pak", "apt"),
   lib = NULL,
-  run_function = c("external", "internal"),
-  skip_false = TRUE,
-  echo = TRUE,
-  cols_extra = "Author",
   ...
 )
+
+rpl_run_scripts(
+  scripts,
+  run_function = c("external", "internal"),
+  skip_false = TRUE,
+  echo = TRUE
+)
+
+rpl_write_report(runs, cols_extra = "Author")
+
+rpl_print_summary(runs)
 }
 \arguments{
 \item{dir_path}{Folders with the scripts, in the order they should run.}
@@ -26,52 +39,68 @@ are dropped, e.g. \code{c("888", "OLD")}.}
 
 \item{recursive}{Look into subfolders?}
 
-\item{...}{\code{rpl_list_scripts()}: passed to \code{rpl_list_Rfiles()}, e.g.
-\code{keep_field}. \code{rpl_replicate()}: passed to \code{rpl_install_missing()}, e.g.
-\code{type = "binary"}.}
+\item{...}{\code{rpl_list_scripts()}: passed to \code{\link[=rpl_list_Rfiles]{rpl_list_Rfiles()}}, e.g.
+\code{keep_field}. \code{rpl_check_packages()}: passed to \code{\link[=rpl_install_missing]{rpl_install_missing()}},
+e.g. \code{type = "binary"}.}
 
 \item{scripts}{Table of scripts, from \code{rpl_list_scripts()}.}
 
-\item{install}{How to install missing packages: \code{"none"} (only report them),
-or a \code{method} of \code{rpl_install_missing()}.}
+\item{install}{How to install missing packages: \code{"none"} (only list them),
+or a \code{method} of \code{\link[=rpl_install_missing]{rpl_install_missing()}}.}
 
-\item{lib}{Folder where to install the packages, see \code{rpl_install_missing()}.}
+\item{lib}{Folder where to install the packages, see \code{\link[=rpl_install_missing]{rpl_install_missing()}}.}
 
-\item{run_function}{\code{"external"} (a new R session per script) or \code{"internal"}.}
+\item{run_function}{\code{"external"} (a new R session per script, with a \code{.Rout}
+file) or \code{"internal"} (in the current session, no \code{.Rout} file).}
 
 \item{skip_false}{Skip the scripts with \code{run_replicate: FALSE} in their YAML
 header? Scripts without the field are run.}
 
 \item{echo}{print which file done, and gc?}
 
+\item{runs}{Table of the run, from \code{rpl_run_scripts()}.}
+
 \item{cols_extra}{Extra columns to keep in the report, when they exist.}
 }
 \value{
-\code{rpl_list_scripts()}: a table with one row per script.
-\code{rpl_replicate()}: the table of the run, invisibly.
+\code{rpl_list_scripts()}, \code{rpl_add_last_run()} and \code{rpl_run_scripts()}:
+a table with one row per script. \code{rpl_check_packages()},
+\code{rpl_write_report()} and \code{rpl_print_summary()}: their input, invisibly.
 }
 \description{
-The two verbs of a master script, meant to be piped:
-\code{rpl_list_scripts()} lists the scripts with their YAML fields and the result
-of the last run, in the order they will run. The table can then be filtered
-further with dplyr. \code{rpl_replicate()} checks the packages, runs the scripts,
-appends the run to the report and prints a summary. Folders are set
-beforehand with \code{rpl_set_dirs()}.
+Verbs meant to be piped in a master script, each doing one step:
+\enumerate{
+\item \code{rpl_list_scripts()} lists the R scripts with all their YAML fields, in
+the order they will run.
+\item \code{rpl_add_last_run()} adds the result of the last run (\code{has_error_last},
+\code{elapsed_last}), read from the replication report.
+\item \code{rpl_check_packages()} lists the packages used by the scripts that are
+not installed, and optionally installs them.
+\item \code{rpl_run_scripts()} runs each script and keeps its \code{.Rout} file in the
+archive \verb{<session_dir>/session_YYYY_MM_DD/}.
+\item \code{rpl_write_report()} appends the run to the replication report
+\verb{<report_dir>/replication_report.csv}.
+\item \code{rpl_print_summary()} prints the errors, the scripts that broke or got
+fixed since the last run, and the slowest scripts.
+}
 }
 \details{
-Scripts run in the order of \code{dir_path}, then by folder and file name. With
-\code{run_function = "external"}, each script runs in a new R session started
-from the working directory, and its \code{.Rout} file is kept in
-\verb{<session_dir>/session_YYYY_MM_DD}.
+The two folders are set beforehand with \code{\link[=rpl_set_dirs]{rpl_set_dirs()}}. Scripts run in the
+order of \code{dir_path}, then by folder and file name, each in a new R session
+started from the working directory (\code{run_function = "external"}). Scripts
+with \code{run_replicate: FALSE} in their YAML header are listed but not checked
+nor run.
 }
 \examples{
-old <- rpl_set_dirs(report_dir = tempdir())
+library(replicater)
+old <- rpl_set_dirs(report_dir = file.path(tempdir(), "code_meta"))
 path_scripts <- system.file("r_scripts_fake", package = "replicater")
 
-scripts <- rpl_list_scripts(path_scripts)
-out <- rpl_replicate(scripts, echo = FALSE)
-
-## second run: the summary compares with the first one
-out <- rpl_replicate(rpl_list_scripts(path_scripts), echo = FALSE)
+rpl_list_scripts(path_scripts) \%>\%
+  rpl_add_last_run() \%>\%
+  rpl_check_packages() \%>\%
+  rpl_run_scripts(echo = FALSE) \%>\%
+  rpl_write_report() \%>\%
+  rpl_print_summary()
 options(old)
 }
