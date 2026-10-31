@@ -1,7 +1,7 @@
 Package: replicater
 Title: Replicate multiple scripts and issue a report
-Version: 0.1
-Date: 2026-10-17
+Version: 0.2
+Date: 2026-10-28
 Authors@R: 
     person("Matthieu", "Stigler", , "Matthieu.Stigler@example.com", role = c("aut", "cre"))
 Description: Thids package intends to replicate multiple scripts contained, and issue a tabular document reporting the errors encountered.
